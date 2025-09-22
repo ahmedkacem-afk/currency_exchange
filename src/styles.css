@@ -1,0 +1,22 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Basic direction support for inputs */
+[dir="rtl"] input, [dir="rtl"] select, [dir="rtl"] textarea {
+  text-align: right;
+}
+
+/* Cashier theme accents */
+.cash-accent {
+  background-image: linear-gradient(135deg, rgba(5,150,105,0.1), rgba(16,185,129,0.08));
+}
+
+/* Toast animations */
+@keyframes slide-in-right {
+  from { opacity: 0; transform: translateX(12px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+.toast-enter { animation: slide-in-right 180ms ease-out; }
+
+
