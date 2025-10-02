@@ -9,17 +9,18 @@ const strings = {
       create: 'Create Entities',
       changePassword: 'Change Password',
       logout: 'Sign Out',
-      account: 'Account'
+      account: 'Account',
+      menu: 'Menu'
     },
     login: { title: 'Manager Login', email: 'Email', password: 'Password', submit: 'Login' },
     dashboard: {
       totals: 'Totals', totalUsd: 'Total USD', totalLyd: 'Total LYD', numWallets: 'Wallets',
       selectWallet: 'Select Wallet', walletBalances: 'Wallet Balances', usd: 'USD', lyd: 'LYD',
       buyInfo: 'Buying Dinar', sellInfo: 'Selling Dinar', lowest: 'Lowest', median: 'Median', highest: 'Highest',
-      managerPrices: 'Manager Prices', sellOld: 'Selling old dinar', sellNew: 'Selling new dinar', buyOld: 'Buying old dinar', buyNew: 'Buying new dinar', save: 'Save Prices'
+      managerPrices: 'Manager Prices', sellold: 'Selling old dinar', sellnew: 'Selling new dinar', buyold: 'Buying old dinar', buynew: 'Buying new dinar', save: 'Save Prices'
     },    withdrawals: {
       title: 'Withdrawals & Reports', chooseWallet: 'Choose Wallet', usd: 'USD to withdraw', lyd: 'LYD to withdraw', reason: 'Reason', confirm: 'Confirm Withdraw',
-      reportType: 'Report Type', exportPdf: 'Export PDF'
+      reportType: 'Report Type', exportPdf: 'Export PDF', currency: 'Currency to withdraw', amount: 'Amount to withdraw'
     },
     updatePassword: {
       title: 'Change Password', 
@@ -41,27 +42,30 @@ const strings = {
     create: {
       title: 'Create Entities', wallet: 'Create Wallet', name: 'Name', initUsd: 'Initial USD', initLyd: 'Initial LYD', create: 'Create',
       user: 'Create User', email: 'Email', phone: 'Phone', password: 'Password',
-      operation: 'Create Operation', operationName: 'Operation Name'
+      operation: 'Create Operation', operationName: 'Operation Name',
+      currencyType: 'Create Currency Type', currencyCode: 'Currency Code', currencyName: 'Currency Name',
+      currencySymbol: 'Currency Symbol (Optional)', addCurrency: 'Add Currency', initialBalance: 'Initial Balance'
     }
   },  ar: {
     appTitle: 'إدارة الصرافة',
     nav: { 
       dashboard: 'لوحة المدير', 
-      withdrawals: 'السحوبات والتقارير', 
+      withdrawals: 'المصروفات والتقارير', 
       create: 'إنشاء الكيانات',
       changePassword: 'تغيير كلمة المرور',
       logout: 'تسجيل الخروج',
-      account: 'الحساب'
+      account: 'الحساب',
+      menu: 'القائمة'
     },
     login: { title: 'تسجيل دخول المدير', email: 'البريد الإلكتروني', password: 'كلمة المرور', submit: 'دخول' },
     dashboard: {
       totals: 'الإجماليات', totalUsd: 'إجمالي الدولار', totalLyd: 'إجمالي الدينار', numWallets: 'عدد المحافظ',
       selectWallet: 'اختر المحفظة', walletBalances: 'أرصدة المحفظة', usd: 'دولار', lyd: 'دينار',
       buyInfo: 'معلومات شراء الدينار', sellInfo: 'معلومات بيع الدينار', lowest: 'الأدنى', median: 'الوسطي', highest: 'الأعلى',
-      managerPrices: 'أسعار المدير', sellOld: 'بيع الدينار القديم', sellNew: 'بيع الدينار الجديد', buyOld: 'شراء الدينار القديم', buyNew: 'شراء الدينار الجديد', save: 'حفظ الأسعار'
+      managerPrices: 'أسعار المدير', sellold: 'بيع الدينار القديم', sellnew: 'بيع الدينار الجديد', buyold: 'شراء الدينار القديم', buynew: 'شراء الدينار الجديد', save: 'حفظ الأسعار'
     },    withdrawals: {
-      title: 'السحوبات والتقارير', chooseWallet: 'اختر المحفظة', usd: 'الدولار المسحوب', lyd: 'الدينار المسحوب', reason: 'السبب', confirm: 'تأكيد السحب',
-      reportType: 'نوع التقرير', exportPdf: 'تصدير PDF'
+      title: 'المصروفات والتقارير', chooseWallet: 'اختر المحفظة', usd: 'الدولار المسحوب', lyd: 'الدينار المسحوب', reason: 'السبب', confirm: 'تأكيد السحب',
+      reportType: 'نوع التقرير', exportPdf: 'تصدير PDF', currency: 'العملة المراد سحبها', amount: 'المبلغ المراد سحبه'
     },
     updatePassword: {
       title: 'تغيير كلمة المرور', 
@@ -83,7 +87,9 @@ const strings = {
     create: {
       title: 'إنشاء الكيانات', wallet: 'إنشاء محفظة', name: 'الاسم', initUsd: 'الدولار الابتدائي', initLyd: 'الدينار الابتدائي', create: 'إنشاء',
       user: 'إنشاء مستخدم', email: 'البريد الإلكتروني', phone: 'الهاتف', password: 'كلمة المرور',
-      operation: 'إنشاء نوع معاملات', operationName: 'اسم المعاملة'
+      operation: 'إنشاء نوع معاملات', operationName: 'اسم المعاملة',
+      currencyType: 'إنشاء نوع عملة', currencyCode: 'رمز العملة', currencyName: 'اسم العملة',
+      currencySymbol: 'رمز العملة (اختياري)', addCurrency: 'إضافة عملة', initialBalance: 'الرصيد الأولي'
     }
   }
 }

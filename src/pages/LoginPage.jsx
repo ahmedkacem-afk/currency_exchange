@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useI18n } from '../i18n/I18nProvider.jsx'
-import { login } from '../lib/supabaseApi.js'
+import { login } from '../lib/api.js'
 import { useToast } from '../components/Toast.jsx'
 
 export default function LoginPage() {

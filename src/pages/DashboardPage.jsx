@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useI18n } from '../i18n/I18nProvider.jsx'
-import { getSummary, getWallets, getAllStats, getWalletStats, getPrices, setPrices } from '../lib/supabaseApi.js'
+import { getSummary, getAllStats, getWalletStats, getPrices, setPrices, getWallets } from '../lib/api.js'
 import { Card, CardHeader, CardBody } from '../components/Card.jsx'
 import Button from '../components/Button.jsx'
 import Input from '../components/Input.jsx'
 import { UsdIcon, LydIcon } from '../components/Icons.jsx'
 import { useToast } from '../components/Toast.jsx'
+import AddCurrencyModal from '../components/AddCurrencyModal.jsx'
+import AddCurrencyButton from '../components/AddCurrencyButton.jsx'
+import SaveButton from '../components/SaveButton.jsx'
 
 function StatCard({ title, value }) {
   return (
@@ -40,27 +43,66 @@ export default function DashboardPage() {
   const [prices, setPricesState] = useState(null)
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [isAddCurrencyModalOpen, setIsAddCurrencyModalOpen] = useState(false)
   const { show } = useToast()
 
   useEffect(() => {
     setLoading(true)
-    Promise.all([getSummary(), getWallets(), getAllStats(), getPrices()]).then(([s, ws, sa, p]) => {
-      console.log('Dashboard data loaded:', { summary: s, wallets: ws, stats: sa, prices: p })
-      setSummary(s)
+    
+    // Load all data in parallel
+    Promise.all([
+      // Get summary data
+      getSummary().catch(error => {
+        console.error('Error loading summary:', error);
+        return null;
+      }),
+      
+      // Get wallets directly from Supabase
+      getWallets().catch(error => {
+        console.error('Error loading wallets:', error);
+        return { wallets: [] };
+      }),
+      
+      // Get stats
+      getAllStats().catch(error => {
+        console.error('Error loading stats:', error);
+        return null;
+      }),
+      
+      // Get prices
+      getPrices().catch(error => {
+        console.error('Error loading prices:', error);
+        return null;
+      })
+    ]).then(([s, ws, sa, p]) => {
+      console.log('DashboardPage - All data loaded:', { 
+        summary: s, 
+        wallets: ws, 
+        stats: sa, 
+        prices: p 
+      });
+      
+      // Set summary data
+      setSummary(s);
+      
       // Extract wallets from the response
       if (ws && ws.wallets) {
-        console.log('Setting wallets:', ws.wallets)
-        setWallets(ws.wallets)
+        console.log('DashboardPage - Setting wallets:', ws.wallets);
+        setWallets(ws.wallets);
       } else {
-        console.error('No wallets found in response:', ws)
-        setWallets([])
+        console.error('DashboardPage - No wallets found in response:', ws);
+        setWallets([]);
       }
-      setStatsAll(sa)
-      setPricesState(p)
+      
+      // Set other data
+      setStatsAll(sa);
+      setPricesState(p);
     }).catch(err => {
-      console.error('Error loading dashboard data:', err)
-      show('Error loading dashboard data', 'error')
-    }).finally(()=>setLoading(false))
+      console.error('DashboardPage - Error loading dashboard data:', err);
+      show('Error loading dashboard data', 'error');
+    }).finally(() => {
+      setLoading(false);
+    });
   }, [])
 
   useEffect(() => {
@@ -81,7 +123,9 @@ export default function DashboardPage() {
         sellold: Number(prices.sellold),
         sellnew: Number(prices.sellnew),
         buyold: Number(prices.buyold),
-        buynew: Number(prices.buynew)
+        buynew: Number(prices.buynew),
+        sellDisabled: Boolean(prices.sellDisabled),
+        buyDisabled: Boolean(prices.buyDisabled)
       })
       
       const updated = await setPrices({
@@ -89,6 +133,8 @@ export default function DashboardPage() {
         sellnew: Number(prices.sellnew),
         buyold: Number(prices.buyold),
         buynew: Number(prices.buynew),
+        sellDisabled: Boolean(prices.sellDisabled),
+        buyDisabled: Boolean(prices.buyDisabled)
       })
       
       console.log('Prices updated response:', updated)
@@ -105,31 +151,105 @@ export default function DashboardPage() {
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* Legacy USD card */}
         <Card>
           <CardHeader icon={<UsdIcon />} title={Intl.NumberFormat().format(summary?.totalUsd ?? 0)} subtitle={t('dashboard.totalUsd')} />
           <CardBody className="cash-accent rounded-b-xl h-2"></CardBody>
         </Card>
+        
+        {/* Legacy LYD card */}
         <Card>
           <CardHeader icon={<LydIcon />} title={Intl.NumberFormat().format(summary?.totalLyd ?? 0)} subtitle={t('dashboard.totalLyd')} />
           <CardBody className="cash-accent rounded-b-xl h-2"></CardBody>
         </Card>
+        
+        {/* Number of wallets */}
         <Card>
           <CardHeader title={summary?.count ?? '-'} subtitle={t('dashboard.numWallets')} />
           <CardBody className="cash-accent rounded-b-xl h-2"></CardBody>
         </Card>
+        
+        {/* Dynamic currency totals */}
+        {summary?.currencyTotals && Object.entries(summary.currencyTotals)
+          // Filter out USD and LYD since they're already displayed above
+          .filter(([code]) => code !== 'USD' && code !== 'LYD')
+          .map(([code, total]) => (
+            <Card key={code}>
+              <CardHeader 
+                title={Intl.NumberFormat().format(total)} 
+                subtitle={`Total ${code}`} 
+              />
+              <CardBody className="cash-accent rounded-b-xl h-2"></CardBody>
+            </Card>
+          ))
+        }
       </div>
 
       <Card>
         <CardHeader title={t('dashboard.walletBalances')} subtitle={t('dashboard.selectWallet')} />
         <CardBody className="space-y-3">
-          <select className="border rounded-md px-3 py-2" value={selected} onChange={e => setSelected(e.target.value)}>
-            <option value="">--</option>
-            {wallets.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
-          </select>
+          <div className="flex items-center gap-2">
+            <select 
+              className="border rounded-md px-3 py-2 flex-grow" 
+              value={selected} 
+              onChange={e => setSelected(e.target.value)}
+            >
+              <option value="">--</option>
+              {wallets.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+            </select>
+            
+            {/* Add button for adding currencies to wallet */}
+            {selected && (
+              <AddCurrencyButton
+                variant="primary"
+                className="ml-2"
+                onClick={() => setIsAddCurrencyModalOpen(true)}
+                title="Add Currency"
+              >
+                Add Currency
+              </AddCurrencyButton>
+            )}
+          </div>
+          
           {selectedWallet && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Card><CardHeader icon={<UsdIcon />} title={Intl.NumberFormat().format(selectedWallet.usd)} subtitle={t('dashboard.usd')} /></Card>
-              <Card><CardHeader icon={<LydIcon />} title={Intl.NumberFormat().format(selectedWallet.lyd)} subtitle={t('dashboard.lyd')} /></Card>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+              {/* Show legacy USD and LYD if present */}
+              {selectedWallet.usd !== undefined && (
+                <Card>
+                  <CardHeader 
+                    icon={<UsdIcon />} 
+                    title={Intl.NumberFormat().format(selectedWallet.usd)} 
+                    subtitle={t('dashboard.usd')} 
+                  />
+                </Card>
+              )}
+              
+              {selectedWallet.lyd !== undefined && (
+                <Card>
+                  <CardHeader 
+                    icon={<LydIcon />} 
+                    title={Intl.NumberFormat().format(selectedWallet.lyd)} 
+                    subtitle={t('dashboard.lyd')} 
+                  />
+                </Card>
+              )}
+              
+              {/* Show all other currencies from the currencies object */}
+              {selectedWallet.currencies && Object.entries(selectedWallet.currencies)
+                // Filter out USD/LYD if they're already shown from legacy fields
+                .filter(([code]) => 
+                  (code !== 'USD' || selectedWallet.usd === undefined) && 
+                  (code !== 'LYD' || selectedWallet.lyd === undefined)
+                )
+                .map(([code, balance]) => (
+                  <Card key={code}>
+                    <CardHeader 
+                      title={Intl.NumberFormat().format(balance)} 
+                      subtitle={code} 
+                    />
+                  </Card>
+                ))
+              }
             </div>
           )}
         </CardBody>
@@ -175,16 +295,111 @@ export default function DashboardPage() {
         <CardHeader title={t('dashboard.managerPrices')} />
         <CardBody>
           <form onSubmit={onSavePrices} className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Input label={t('dashboard.sellOld')} value={prices?.sellold ?? ''} onChange={e => setPricesState(p => ({ ...p, sellold: e.target.value }))} />
-              <Input label={t('dashboard.sellNew')} value={prices?.sellnew ?? ''} onChange={e => setPricesState(p => ({ ...p, sellnew: e.target.value }))} />
-              <Input label={t('dashboard.buyOld')} value={prices?.buyold ?? ''} onChange={e => setPricesState(p => ({ ...p, buyold: e.target.value }))} />
-              <Input label={t('dashboard.buyNew')} value={prices?.buynew ?? ''} onChange={e => setPricesState(p => ({ ...p, buynew: e.target.value }))} />
+            {/* Selling Section */}
+            <div className="border p-4 rounded-lg mb-4">
+              <div className="flex justify-between items-center mb-3">
+                <h3 className="font-semibold text-lg">Selling Prices</h3>
+                <div className="flex items-center">
+                  <span className="mr-2 text-sm text-gray-600">
+                    {prices?.sellDisabled ? 'Disabled' : 'Enabled'}
+                  </span>
+                  <Button
+                    type="button"
+                    variant={prices?.sellDisabled ? "success" : "danger"}
+                    size="sm"
+                    onClick={() => setPricesState(p => ({ 
+                      ...p, 
+                      sellDisabled: !p?.sellDisabled
+                    }))}
+                  >
+                    {prices?.sellDisabled ? 'Enable' : 'Disable'}
+                  </Button>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Input 
+                  label={t('dashboard.sellold')} 
+                  value={prices?.sellold ?? ''} 
+                  onChange={e => setPricesState(p => ({ ...p, sellold: e.target.value }))}
+                  disabled={prices?.sellDisabled}
+                />
+                <Input 
+                  label={t('dashboard.sellnew')} 
+                  value={prices?.sellnew ?? ''} 
+                  onChange={e => setPricesState(p => ({ ...p, sellnew: e.target.value }))}
+                  disabled={prices?.sellDisabled}
+                />
+              </div>
             </div>
-            <Button disabled={saving} type="submit" variant="success">{saving ? '...' : t('dashboard.save')}</Button>
+            
+            {/* Buying Section */}
+            <div className="border p-4 rounded-lg mb-4">
+              <div className="flex justify-between items-center mb-3">
+                <h3 className="font-semibold text-lg">Buying Prices</h3>
+                <div className="flex items-center">
+                  <span className="mr-2 text-sm text-gray-600">
+                    {prices?.buyDisabled ? 'Disabled' : 'Enabled'}
+                  </span>
+                  <Button
+                    type="button"
+                    variant={prices?.buyDisabled ? "success" : "danger"}
+                    size="sm"
+                    onClick={() => setPricesState(p => ({ 
+                      ...p, 
+                      buyDisabled: !p?.buyDisabled
+                    }))}
+                  >
+                    {prices?.buyDisabled ? 'Enable' : 'Disable'}
+                  </Button>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Input 
+                  label={t('dashboard.buyold')} 
+                  value={prices?.buyold ?? ''} 
+                  onChange={e => setPricesState(p => ({ ...p, buyold: e.target.value }))}
+                  disabled={prices?.buyDisabled}
+                />
+                <Input 
+                  label={t('dashboard.buynew')} 
+                  value={prices?.buynew ?? ''} 
+                  onChange={e => setPricesState(p => ({ ...p, buynew: e.target.value }))}
+                  disabled={prices?.buyDisabled}
+                />
+              </div>
+            </div>
+            
+            <SaveButton disabled={saving} type="submit" variant="success">
+              {saving ? '...' : t('dashboard.save')}
+            </SaveButton>
           </form>
         </CardBody>
       </Card>
+      
+      {/* Modals */}
+      <AddCurrencyModal 
+        isOpen={isAddCurrencyModalOpen}
+        onClose={() => setIsAddCurrencyModalOpen(false)}
+        onSuccess={() => {
+          // Refresh wallet data after adding a currency
+          const refreshData = async () => {
+            try {
+              const [s, ws] = await Promise.all([getSummary(), getWallets()]);
+              setSummary(s);
+              if (ws && ws.wallets) {
+                setWallets(ws.wallets);
+              }
+            } catch (err) {
+              console.error('Error refreshing data:', err);
+              show('Error refreshing data', 'error');
+            }
+          };
+          refreshData();
+        }}
+        wallet={selectedWallet}
+      />
     </div>
   )
 }

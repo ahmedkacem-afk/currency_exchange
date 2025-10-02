@@ -37,22 +37,69 @@ export async function logout() {
 // Wallets
 export async function getWallets() {
   console.log('Fetching wallets from Supabase')
-  const { data, error } = await supabase
-    .from('wallets')
-    .select('id, name, usd, lyd')
-    .order('name', { ascending: true })
+  try {
+    // Get wallets with legacy fields
+    const { data: wallets, error } = await supabase
+      .from('wallets')
+      .select('id, name, usd, lyd')
+      .order('name', { ascending: true })
+      
+    if (error) throw error
     
-  if (error) {
+    // Initialize walletsWithCurrencies with just the legacy fields
+    const walletsWithCurrencies = wallets.map(wallet => {
+      const currencies = {};
+      
+      // Add legacy USD and LYD to currencies object if they exist
+      if (wallet.usd !== null && wallet.usd !== undefined) {
+        currencies.USD = Number(wallet.usd) || 0;
+      }
+      
+      if (wallet.lyd !== null && wallet.lyd !== undefined) {
+        currencies.LYD = Number(wallet.lyd) || 0;
+      }
+      
+      return {
+        ...wallet,
+        currencies
+      };
+    });
+    
+    try {
+      // Try to get all wallet currencies - this may fail if table doesn't exist yet
+      const { data: walletCurrencies } = await supabase
+        .from('wallet_currencies')
+        .select('wallet_id, currency_code, balance')
+      
+      // If we have wallet_currencies data, add them to the wallets
+      if (walletCurrencies && walletCurrencies.length > 0) {
+        // Update each wallet with its currencies
+        walletsWithCurrencies.forEach(wallet => {
+          walletCurrencies
+            .filter(c => c.wallet_id === wallet.id)
+            .forEach(c => {
+              // Only add if not already present from legacy fields or if higher
+              const currBalance = Number(c.balance) || 0;
+              const existingBalance = wallet.currencies[c.currency_code] || 0;
+              wallet.currencies[c.currency_code] = Math.max(currBalance, existingBalance);
+            });
+        });
+      }
+    } catch (currenciesError) {
+      // If wallet_currencies table doesn't exist yet, just continue with legacy fields
+      console.warn('Could not fetch wallet currencies, continuing with legacy fields only:', currenciesError);
+    }
+    
+    console.log('Wallets fetched successfully with currencies:', walletsWithCurrencies)
+    return { wallets: walletsWithCurrencies }
+  } catch (error) {
     console.error('Error fetching wallets:', error)
     throw error
   }
-  
-  console.log('Wallets fetched successfully:', data)
-  return { wallets: data }
 }
 
 export async function createWallet(payload) {
-  const { name, usd = 0, lyd = 0 } = payload
+  const { name, usd = 0, lyd = 0, currencies = {} } = payload
   
   try {
     // Use prepareNewEntity to add UUID and created_at
@@ -62,6 +109,7 @@ export async function createWallet(payload) {
       lyd
     });
     
+    // Create the wallet first
     const { data, error } = await supabase
       .from('wallets')
       .insert(walletData)
@@ -69,7 +117,37 @@ export async function createWallet(payload) {
       .single()
       
     if (error) throw error
-    return { wallet: data }
+    
+    // Now add any additional currencies
+    const walletCurrencies = [];
+    
+    // Skip USD and LYD as they're stored in the legacy fields
+    for (const code in currencies) {
+      if (code !== 'USD' && code !== 'LYD' && currencies[code] > 0) {
+        walletCurrencies.push({
+          wallet_id: data.id,
+          currency_code: code,
+          balance: currencies[code]
+        });
+      }
+    }
+    
+    // Insert additional currencies if any
+    if (walletCurrencies.length > 0) {
+      const { error: currencyError } = await supabase
+        .from('wallet_currencies')
+        .insert(walletCurrencies);
+        
+      if (currencyError) throw currencyError;
+    }
+    
+    // Return wallet with currencies
+    return { 
+      wallet: {
+        ...data,
+        currencies
+      }
+    }
   } catch (error) {
     console.error('Error creating wallet:', error);
     throw new Error(formatErrorMessage(error));
@@ -78,36 +156,62 @@ export async function createWallet(payload) {
 
 // Summary and statistics
 export async function getSummary() {
-  // First try to use the RPC function if it exists
   try {
-    const { data, error } = await supabase.rpc('wallets_summary')
-    if (!error && data) {
-      // Count wallets separately
-      const { count, error: countError } = await supabase
-        .from('wallets')
-        .select('id', { count: 'exact' })
-      
-      return {
-        ...data,
-        count: countError ? 0 : count
-      }
-    }
-  } catch (e) {
-    console.log('RPC not available, falling back to query')
-  }
-  
-  // Otherwise, calculate summary through a regular query
-  const { data: wallets, error } = await supabase
-    .from('wallets')
-    .select('usd, lyd')
+    // Get legacy USD and LYD totals
+    const { data: wallets, error } = await supabase
+      .from('wallets')
+      .select('id, usd, lyd')
     
-  if (error) throw error
-  
-  const totalUsd = wallets.reduce((sum, wallet) => sum + Number(wallet.usd), 0)
-  const totalLyd = wallets.reduce((sum, wallet) => sum + Number(wallet.lyd), 0)
-  const count = wallets.length
-  
-  return { totalUsd, totalLyd, count }
+    if (error) throw error
+    
+    // Calculate legacy USD and LYD totals
+    const totalUsd = wallets.reduce((sum, wallet) => sum + Number(wallet.usd || 0), 0);
+    const totalLyd = wallets.reduce((sum, wallet) => sum + Number(wallet.lyd || 0), 0);
+    
+    // Initialize currency totals with legacy currencies
+    const currencyTotals = {
+      USD: totalUsd,
+      LYD: totalLyd
+    };
+    
+    try {
+      // Try to get all wallet currencies - this may fail if table doesn't exist yet
+      const { data: walletCurrencies } = await supabase
+        .from('wallet_currencies')
+        .select('currency_code, balance')
+      
+      // Calculate totals for all currencies from wallet_currencies
+      if (walletCurrencies && walletCurrencies.length > 0) {
+        walletCurrencies.forEach(currency => {
+          const code = currency.currency_code;
+          const balance = Number(currency.balance) || 0;
+          
+          if (!currencyTotals[code]) {
+            currencyTotals[code] = 0;
+          }
+          
+          currencyTotals[code] += balance;
+        });
+        
+        // Use the higher value if both exist in legacy and currency tables
+        currencyTotals.USD = Math.max(currencyTotals.USD || 0, totalUsd);
+        currencyTotals.LYD = Math.max(currencyTotals.LYD || 0, totalLyd);
+      }
+    } catch (currenciesError) {
+      // If wallet_currencies table doesn't exist yet, just continue with legacy fields
+      console.warn('Could not fetch wallet currencies, continuing with legacy totals only:', currenciesError);
+    }
+    
+    return { 
+      totalUsd,  // Keep for backward compatibility
+      totalLyd,  // Keep for backward compatibility
+      count: wallets.length,
+      currencyTotals  // All currency totals, including legacy if wallet_currencies doesn't exist
+    };
+  } catch (error) {
+    console.error('Error getting summary:', error);
+    throw error;
+  }
 }
 
 export async function getAllStats() {
@@ -203,85 +307,129 @@ export async function getWalletStats(walletId) {
 // Prices management
 export async function getPrices() {
   try {
-    const { data, error } = await supabase
+    // Get prices with lowercase fields
+    const { data: lowercaseData, error: lowercaseError } = await supabase
       .from('manager_prices')
-      .select('*')
-      .single()
-    
-    if (error) {
-      // If the error is because the record doesn't exist, create a default one
-      if (error.code === 'PGRST116') {
-        console.log('No manager_prices record found, creating default')
-        const defaultPrices = {
-          id: 1,
-          sellold: 5.0,
-          sellnew: 5.2,
-          buyold: 4.8,
-          buynew: 5.0
-        }
-        
-        const { data: insertData, error: insertError } = await supabase
-          .from('manager_prices')
-          .insert(defaultPrices)
-          .select()
-          .single()
-        
-        if (insertError) throw insertError
-        return insertData
-      } else {
-        // Some other error occurred
-        throw error
-      }
+      .select('id, sellold, sellnew, buyold, buynew')
+      .single();
+      
+    if (!lowercaseError && lowercaseData) {
+      console.log('Got manager prices with lowercase fields');
+      return lowercaseData;
     }
     
-    return data
+    // If no record exists, create a default record
+    if (lowercaseError && lowercaseError.code === 'PGRST116') {
+      console.log('No manager_prices record found, creating default');
+      
+      // Use lowercase field names for new records
+      const defaultPrices = {
+        id: 1,
+        sellold: 5.0,
+        sellnew: 5.2,
+        buyold: 4.8,
+        buynew: 5.0
+      };
+      
+      const { data: insertData, error: insertError } = await supabase
+        .from('manager_prices')
+        .insert(defaultPrices)
+        .select('id, sellold, sellnew, buyold, buynew')
+        .single();
+      
+      if (insertError) throw insertError;
+      return insertData;
+    }
+    
+    // Some other error occurred
+    throw camelCaseError || lowercaseError;
   } catch (error) {
-    console.error('Error in getPrices:', error)
-    throw error
+    console.error('Error in getPrices:', error);
+    throw error;
   }
 }
 
 export async function setPrices(payload) {
   try {
-    // First check if the record exists
-    const { data: existingRecord, error: fetchError } = await supabase
+    // Check if a record exists with lowercase field names
+    const { data: lowercaseData, error: lowercaseError } = await supabase
       .from('manager_prices')
-      .select('*')
+      .select('id, sellold, sellnew, buyold, buynew')
       .eq('id', 1)
-      .single()
+      .maybeSingle();
     
-    if (fetchError) {
-      // If the error is because the record doesn't exist, create it
-      if (fetchError.code === 'PGRST116') {
-        console.log('No manager_prices record found, creating one')
-        const { data: insertData, error: insertError } = await supabase
-          .from('manager_prices')
-          .insert({ id: 1, ...payload })
-          .select()
-          .single()
-        
-        if (insertError) throw insertError
-        return insertData
-      } else {
-        // Some other error occurred
-        throw fetchError
-      }
+    // If no record exists, create a new record with lowercase field names
+    if (lowercaseError && lowercaseError.code === 'PGRST116') {
+      console.log('No manager_prices record found, creating one with lowercase fields');
+      
+      const { data: insertData, error: insertError } = await supabase
+        .from('manager_prices')
+        .insert({ id: 1, ...payload })
+        .select('id, sellold, sellnew, buyold, buynew')
+        .single();
+      
+      if (insertError) throw insertError;
+      return insertData;
     }
     
-    // Record exists, update it
-    console.log('Updating existing manager_prices record:', existingRecord)
-    const { data, error } = await supabase
-      .from('manager_prices')
-      .update(payload)
-      .eq('id', 1)
-      .select()
-      .single()
+    // If camelCase exists, update camelCase fields
+    if (camelCaseData) {
+      console.log('Updating manager_prices with camelCase fields');
+      
+      const camelCasePayload = {
+        sellOld: payload.sellold,
+        sellNew: payload.sellnew,
+        buyOld: payload.buyold,
+        buyNew: payload.buynew,
+        sellDisabled: payload.sellDisabled,
+        buyDisabled: payload.buyDisabled
+      };
+      
+      const { data, error } = await supabase
+        .from('manager_prices')
+        .update(camelCasePayload)
+        .eq('id', 1)
+        .select('id, "sellOld", "sellNew", "buyOld", "buyNew"')
+        .single();
+      
+      if (error) throw error;
+      
+      // Convert to lowercase field names for app consistency
+      return {
+        id: data.id,
+        sellold: data.sellOld,
+        sellnew: data.sellNew,
+        buyold: data.buyOld,
+        buynew: data.buyNew,
+        sellDisabled: payload.sellDisabled,
+        buyDisabled: payload.buyDisabled
+      };
+    }
     
-    if (error) throw error
-    return data
+    // If lowercase exists, update lowercase fields
+    if (lowercaseData) {
+      console.log('Updating manager_prices with lowercase fields');
+      
+      const { data, error } = await supabase
+        .from('manager_prices')
+        .update(payload)
+        .eq('id', 1)
+        .select('id, sellold, sellnew, buyold, buynew')
+        .single();
+      
+      if (error) throw error;
+      return {
+        ...data,
+        sellDisabled: payload.sellDisabled,
+        buyDisabled: payload.buyDisabled
+      };
+    }
+    
+    // If we get here, something unexpected happened
+    throw new Error('Could not determine manager_prices schema format');
   } catch (error) {
-    console.error('Error in setPrices:', error)
-    throw error
+    console.error('Error in setPrices:', error);
+    throw error;
   }
 }
 

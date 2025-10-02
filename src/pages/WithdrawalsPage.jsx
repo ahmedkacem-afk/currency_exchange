@@ -1,17 +1,20 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { useI18n } from '../i18n/I18nProvider.jsx'
-import { getWallets, withdraw, exportPdf } from '../lib/api.js'
+import { exportPdf, getWallets as fetchWallets, withdrawCurrency, getAllCurrencyTypes } from '../lib/api.js'
 import { Card, CardHeader, CardBody } from '../components/Card.jsx'
 import Button from '../components/Button.jsx'
 import Input from '../components/Input.jsx'
 import { useToast } from '../components/Toast.jsx'
+import CurrencySelect from '../components/CurrencySelect.jsx'
+import WithdrawButton from '../components/WithdrawButton.jsx'
 
 export default function WithdrawalsPage() {
   const { t } = useI18n()
   const [wallets, setWallets] = useState([])
+  const [selectedWallet, setSelectedWallet] = useState(null)
   const [walletId, setWalletId] = useState('')
-  const [usd, setUsd] = useState('')
-  const [lyd, setLyd] = useState('')
+  const [currencyCode, setCurrencyCode] = useState('')
+  const [amount, setAmount] = useState('')
   const [reason, setReason] = useState('')
   const [reportType, setReportType] = useState('summary')
   const [message, setMessage] = useState('')
@@ -19,19 +22,121 @@ export default function WithdrawalsPage() {
   const { show } = useToast()
 
   useEffect(() => {
-    getWallets().then(setWallets)
+    async function getWallets() {
+      try {
+        console.log('WithdrawalsPage - Fetching wallets directly from Supabase...');
+        setLoading(true);
+        
+        // Use the Supabase wallets API directly
+        const response = await fetchWallets();
+        
+        if (response && response.wallets) {
+          console.log('WithdrawalsPage - Wallets loaded successfully:', response.wallets);
+          setWallets(response.wallets);
+        } else {
+          console.error('WithdrawalsPage - Unexpected wallet data format:', response);
+          setWallets([]);
+        }
+      } catch (error) {
+        console.error('WithdrawalsPage - Error fetching wallets:', error);
+        show('Failed to load wallets', 'error');
+        setWallets([]);
+      } finally {
+        setLoading(false);
+      }
+    }
+    
+    getWallets();
   }, [])
+  
+  // Update selected wallet when walletId changes
+  useEffect(() => {
+    if (!walletId) {
+      setSelectedWallet(null);
+      return;
+    }
+    
+    const wallet = wallets.find(w => w.id === walletId);
+    console.log('WithdrawalsPage - Selected wallet:', wallet, 'from wallets:', wallets);
+    
+    if (wallet) {
+      // Make sure the wallet has a currencies object
+      if (!wallet.currencies) {
+        wallet.currencies = {};
+        
+        // Add legacy USD/LYD if present
+        if (wallet.usd !== null && wallet.usd !== undefined) {
+          wallet.currencies.USD = Number(wallet.usd);
+        }
+        
+        if (wallet.lyd !== null && wallet.lyd !== undefined) {
+          wallet.currencies.LYD = Number(wallet.lyd);
+        }
+      }
+      
+      console.log('WithdrawalsPage - Wallet currencies:', wallet.currencies);
+      setSelectedWallet(wallet);
+      // Reset currency when wallet changes
+      setCurrencyCode('');
+    } else {
+      console.warn(`WithdrawalsPage - Could not find wallet with ID ${walletId} in wallets array:`, wallets);
+      setSelectedWallet(null);
+    }
+  }, [walletId, wallets])
 
   async function onWithdraw(e) {
     e.preventDefault()
     setMessage('')
+    
+    if (!walletId || !currencyCode || !amount) {
+      show('Please select a wallet, currency, and enter an amount', 'error')
+      return
+    }
+    
     setLoading(true)
     try {
-      const res = await withdraw(walletId, { usd: Number(usd) || 0, lyd: Number(lyd) || 0, reason })
-      setMessage('Updated balances')
-      show('Withdrawal applied', 'success')
+      console.log(`WithdrawalsPage - Processing withdrawal: ${amount} ${currencyCode} from wallet ${walletId}`);
+      
+      // Process the withdrawal
+      const res = await withdrawCurrency(walletId, currencyCode, amount, reason)
+      setMessage(`Updated ${currencyCode} balance`)
+      show(`Successfully withdrew ${amount} ${currencyCode}`, 'success')
+      
+      // Update the selected wallet with the new data
+      if (res) {
+        console.log('WithdrawalsPage - Withdrawal successful, updated wallet:', res);
+        
+        // Make sure the wallet has a currencies object
+        if (res && !res.currencies) {
+          res.currencies = {};
+          
+          // Add legacy USD/LYD if present
+          if (res.usd !== null && res.usd !== undefined) {
+            res.currencies.USD = Number(res.usd);
+          }
+          
+          if (res.lyd !== null && res.lyd !== undefined) {
+            res.currencies.LYD = Number(res.lyd);
+          }
+        }
+        
+        setSelectedWallet(res);
+        
+        // Also refresh all wallets to keep the list up to date
+        console.log('WithdrawalsPage - Refreshing all wallets after withdrawal');
+        const walletsResponse = await fetchWallets();
+        if (walletsResponse && walletsResponse.wallets) {
+          console.log('WithdrawalsPage - Updated wallets:', walletsResponse.wallets);
+          setWallets(walletsResponse.wallets);
+        }
+      }
+      
+      // Reset fields but keep the selected wallet
+      setAmount('')
+      setCurrencyCode('')
     } catch (e) {
-      show('Withdrawal failed', 'error')
+      console.error('WithdrawalsPage - Withdrawal failed:', e)
+      show(e.message || 'Withdrawal failed', 'error')
     } finally {
       setLoading(false)
     }
@@ -46,6 +151,40 @@ export default function WithdrawalsPage() {
     a.click()
     URL.revokeObjectURL(url)
   }
+  
+  // Calculate available currencies for the selected wallet
+  const availableCurrencies = useMemo(() => {
+    if (!selectedWallet) return [];
+    
+    const currencies = [];
+    
+    // Check legacy fields first
+    if (selectedWallet.usd !== null && selectedWallet.usd !== undefined && Number(selectedWallet.usd) > 0) {
+      currencies.push('USD');
+    }
+    
+    if (selectedWallet.lyd !== null && selectedWallet.lyd !== undefined && Number(selectedWallet.lyd) > 0) {
+      currencies.push('LYD');
+    }
+    
+    // Check currencies object
+    if (selectedWallet.currencies) {
+      Object.entries(selectedWallet.currencies).forEach(([code, balance]) => {
+        // Don't double-add USD/LYD if they were already added from legacy fields
+        if ((code === 'USD' && selectedWallet.usd !== undefined) ||
+            (code === 'LYD' && selectedWallet.lyd !== undefined)) {
+          return;
+        }
+        
+        if (Number(balance) > 0) {
+          currencies.push(code);
+        }
+      });
+    }
+    
+    console.log('Available currencies for withdrawal:', currencies);
+    return currencies;
+  }, [selectedWallet]);
 
   return (
     <div className="space-y-6">
@@ -55,17 +194,70 @@ export default function WithdrawalsPage() {
           <form onSubmit={onWithdraw} className="space-y-4">
             <div>
               <div className="text-sm mb-1 text-gray-600">{t('withdrawals.chooseWallet')}</div>
-              <select className="border rounded-md px-3 py-2" value={walletId} onChange={e => setWalletId(e.target.value)}>
+              <select 
+                className="border rounded-md px-3 py-2 w-full" 
+                value={walletId} 
+                onChange={e => setWalletId(e.target.value)}
+              >
                 <option value="">--</option>
                 {wallets.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
               </select>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Input placeholder="100" label={t('withdrawals.usd')} value={usd} onChange={e => setUsd(e.target.value)} />
-              <Input placeholder="250" label={t('withdrawals.lyd')} value={lyd} onChange={e => setLyd(e.target.value)} />
-            </div>
+            
+            {selectedWallet && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <CurrencySelect
+                    label={t('withdrawals.currency')}
+                    value={currencyCode}
+                    onChange={setCurrencyCode}
+                    // Only include currencies that have a balance in this wallet
+                    includeOnlyCodes={availableCurrencies}
+                    required
+                  />
+                </div>
+                <Input
+                  placeholder="100"
+                  label={t('withdrawals.amount')}
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={amount}
+                  onChange={e => setAmount(e.target.value)}
+                  required
+                />
+              </div>
+            )}
+            
             <Input placeholder="Cash payout / Office expense" label={t('withdrawals.reason')} value={reason} onChange={e => setReason(e.target.value)} />
-            <Button disabled={loading} type="submit" variant="success">{loading ? '...' : t('withdrawals.confirm')}</Button>
+            
+            <div className="flex items-center justify-between">
+              <WithdrawButton 
+                disabled={loading || !walletId || !currencyCode || !amount} 
+                type="submit" 
+                variant="success"
+              >
+                {loading ? '...' : t('withdrawals.confirm')}
+              </WithdrawButton>
+              
+              {selectedWallet && currencyCode && (
+                <div className="text-sm text-gray-600">
+                  Available: {(() => {
+                    // Display the correct balance based on where it's stored
+                    if (currencyCode === 'USD' && selectedWallet.usd !== undefined) {
+                      return Number(selectedWallet.usd).toLocaleString();
+                    } else if (currencyCode === 'LYD' && selectedWallet.lyd !== undefined) {
+                      return Number(selectedWallet.lyd).toLocaleString();
+                    } else if (selectedWallet.currencies && selectedWallet.currencies[currencyCode] !== undefined) {
+                      return Number(selectedWallet.currencies[currencyCode]).toLocaleString();
+                    } else {
+                      return '0';
+                    }
+                  })()} {currencyCode}
+                </div>
+              )}
+            </div>
+            
             {message && <div className="text-green-700 text-sm">{message}</div>}
           </form>
         </CardBody>
