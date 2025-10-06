@@ -93,33 +93,38 @@ export default function DealershipExecutionerPage() {
           })
           
           // Determine validation status - default transactions need validation
-          const status = tx.validated ? 'validated' : (tx.needsvalidation ? 'needs-validation' : 'needs-validation')
+          const status = tx.is_validated ? 'validated' : (tx.needs_validation ? 'needs-validation' : 'needs-validation')
           
-          // Compute exchange rates and amounts
-          const dinarPrice = parseFloat(tx.dinarprice || 0)
-          const usdAmount = parseFloat(tx.usdamount || 0)
-          const lydAmount = parseFloat(tx.lydamount || 0)
+          // Use the actual transaction amount fields
+          const amount = parseFloat(tx.amount || 0)
+          const exchangeRate = parseFloat(tx.exchange_rate || 0)
+          const totalAmount = parseFloat(tx.total_amount || 0)
           
-          // Determine client name (we might not have this info)
-          const clientName = tx.clientid ? (userMap[tx.clientid] || 'Client') : 'Walk-in Client'
+          // Determine client name from client_name field or use default
+          const clientName = tx.client_name || 'Walk-in Client'
           
           // Get cashier name if available
-          const cashierName = tx.cashierid ? 
-            (userMap[tx.cashierid] || profiles[tx.cashierid] || 'Unknown Cashier') : 
+          const cashierName = tx.cashier_id ? 
+            (userMap[tx.cashier_id] || profiles[tx.cashier_id] || 'Unknown Cashier') : 
             'System'
+          
+          // Use the actual source and destination from the database if available
+          // Otherwise fallback to type-based logic
+          const source = tx.source || (tx.type === 'buy' ? 'Client' : walletMap[tx.walletid] || 'Wallet')
+          const destination = tx.destination || (tx.type === 'buy' ? walletMap[tx.walletid] || 'Wallet' : 'Client')
           
           return {
             id: tx.id,
             type: tx.type || 'unknown', // 'buy' or 'sell'
             cashierName: cashierName,
             clientName: clientName,
-            source: tx.type === 'buy' ? 'Client' : walletMap[tx.walletid] || 'Wallet',
-            destination: tx.type === 'buy' ? walletMap[tx.walletid] || 'Wallet' : 'Client',
-            currency: 'USD',
-            amount: usdAmount.toString(),
-            exchangeCurrency: 'LYD',
-            exchangeRate: dinarPrice.toString(),
-            totalAmount: lydAmount.toString(),
+            source: source,
+            destination: destination,
+            currency: tx.currency_code || 'USD', // Use actual currency code
+            amount: amount.toString(),
+            exchangeCurrency: tx.exchange_currency_code || 'LYD', // Use actual exchange currency code
+            exchangeRate: exchangeRate.toString(),
+            totalAmount: totalAmount.toString(),
             status: status,
             date: date,
             time: time,
@@ -142,13 +147,16 @@ export default function DealershipExecutionerPage() {
   const handleValidate = async (id) => {
     try {
       // Update the transaction record to mark it as validated
+      // Get the current user first
+      const { data: { user } } = await supabase.auth.getUser();
+      
       const { error } = await supabase
         .from('transactions')
         .update({ 
-          validated: true, 
-          validatedat: new Date().toISOString(),
+          is_validated: true, 
+          validated_at: Date.now(), // Using consistent timestamp format
           // Get the current user's ID
-          validatedby: supabase.auth.user()?.id
+          validator_id: user?.id // Correct column name based on schema
         })
         .eq('id', id)
       
@@ -165,13 +173,13 @@ export default function DealershipExecutionerPage() {
       
       // Create a notification for the cashier if we have their ID
       const transaction = transactions.find(t => t.id === id)
-      if (transaction && transaction.rawData.cashierid) {
+      if (transaction && transaction.rawData.cashier_id) {
         try {
           const { error: notificationError } = await supabase
             .from('notifications')
             .insert({
               id: crypto.randomUUID(),
-              userid: transaction.rawData.cashierid,
+              user_id: transaction.rawData.cashier_id,
               title: 'Transaction Validated',
               message: `Your ${transaction.type} transaction for ${transaction.amount} ${transaction.currency} has been validated`,
               type: 'transaction_validation',
@@ -537,7 +545,9 @@ export default function DealershipExecutionerPage() {
                     <>
                       <div className="grid grid-cols-2 gap-1">
                         <div className="text-sm text-gray-500">
-                          {selectedTransaction.type === 'buy' ? 'USD Amount (Received)' : 'USD Amount (Sold)'}
+                          {selectedTransaction.type === 'buy' 
+                            ? `${selectedTransaction.currency} Amount (Received)` 
+                            : `${selectedTransaction.currency} Amount (Sold)`}
                         </div>
                         <div className="text-sm font-medium text-right">
                           {selectedTransaction.amount} {selectedTransaction.currency}
@@ -553,7 +563,9 @@ export default function DealershipExecutionerPage() {
                       
                       <div className="grid grid-cols-2 gap-1">
                         <div className="text-sm text-gray-500">
-                          {selectedTransaction.type === 'buy' ? 'LYD Amount (Given)' : 'LYD Amount (Received)'}
+                          {selectedTransaction.type === 'buy' 
+                            ? `${selectedTransaction.exchangeCurrency} Amount (Given)` 
+                            : `${selectedTransaction.exchangeCurrency} Amount (Received)`}
                         </div>
                         <div className="text-sm font-medium text-right">
                           {selectedTransaction.totalAmount} {selectedTransaction.exchangeCurrency}

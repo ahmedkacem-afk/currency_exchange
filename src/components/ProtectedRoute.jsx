@@ -64,7 +64,7 @@ export function ProtectedRoute({ requiredRole, requiredRoles }) {
     // Check for potential issues
     if (!userRole) {
       console.error(`ProtectedRoute: ERROR - User role is NULL or UNDEFINED. This likely means the role was not properly loaded from the database.`);
-      console.error(`ProtectedRoute: SUGGESTION - Check if profiles table has a role_id for this user and if getUserRole is working correctly.`);
+      console.error(`ProtectedRoute: SUGGESTION - Check if users table has a role or role_id for this user and if getUserRole is working correctly.`);
     }
     
     const hasRequiredRole = hasRole(rolesToCheck);
@@ -72,7 +72,7 @@ export function ProtectedRoute({ requiredRole, requiredRoles }) {
     
     if (!hasRequiredRole) {
       console.log(`ProtectedRoute: Access denied - User role '${userRole}' not in required roles [${rolesToCheck.join(', ')}]`);
-      console.log(`ProtectedRoute: To fix this issue, make sure the user has one of these roles in the profiles table.`);
+      console.log(`ProtectedRoute: To fix this issue, make sure the user has one of these roles in the users table.`);
       return <Navigate to="/unauthorized" replace />;
     } else {
       console.log(`ProtectedRoute: Access granted - User role '${userRole}' authorized`);

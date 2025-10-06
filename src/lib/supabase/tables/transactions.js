@@ -6,7 +6,7 @@
 
 import supabase, { handleApiError } from '../client'
 import { generateUUID } from '../../uuid'
-import { getWalletById, updateWallet } from './wallets'
+import { getWalletById, updateWallet, updateWalletCurrency } from './wallets'
 
 /**
  * Gets recent transactions
@@ -69,12 +69,24 @@ export async function getTransactionsByWallet(walletId, { limit = 30, offset = 0
  * 
  * @param {Object} transactionData - Transaction data
  * @param {string} transactionData.walletId - Wallet ID
- * @param {number} transactionData.usdAmount - USD amount
- * @param {number} transactionData.lydAmount - LYD amount
- * @param {number} transactionData.dinarPrice - Dinar price
+ * @param {string} transactionData.currency_code - Currency code being bought (primary currency)
+ * @param {number} transactionData.amount - Amount of primary currency
+ * @param {string} transactionData.exchange_currency_code - Exchange currency code
+ * @param {number} transactionData.exchange_rate - Exchange rate
+ * @param {number} transactionData.total_amount - Total amount in exchange currency
  * @returns {Promise<Object>} - Transaction result
  */
-export async function createBuyTransaction({ walletId, usdAmount, lydAmount, dinarPrice }) {
+export async function createBuyTransaction({ 
+  walletId, 
+  currency_code, 
+  amount, 
+  exchange_currency_code, 
+  exchange_rate, 
+  total_amount,
+  source = null,
+  destination = null,
+  cashier_id = null
+}) {
   try {
     // Get the wallet to update its balance
     const wallet = await getWalletById(walletId)
@@ -82,20 +94,41 @@ export async function createBuyTransaction({ walletId, usdAmount, lydAmount, din
       throw new Error('Wallet not found')
     }
     
-    // Update the wallet balances
-    const updatedWallet = await updateWallet(walletId, {
-      usd: Number(wallet.usd) - Number(usdAmount),
-      lyd: Number(wallet.lyd) + Number(lydAmount)
-    })
+    // Handle dynamic currency balances using the wallet_currencies table
+    if (currency_code && amount) {
+      // Increase the bought currency
+      await updateWalletCurrency(walletId, currency_code, amount);
+    }
     
-    // Create the transaction record
+    if (exchange_currency_code && total_amount) {
+      // Decrease the exchange currency
+      await updateWalletCurrency(walletId, exchange_currency_code, -total_amount);
+    }
+    
+    // Get current user session if cashier_id isn't provided
+    if (!cashier_id) {
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        cashier_id = sessionData?.session?.user?.id;
+      } catch (e) {
+        console.error("Error getting user session for cashier_id:", e);
+      }
+    }
+
+    // Create the transaction record with the actual columns from the database
     const transactionData = {
       id: generateUUID(),
       type: 'buy',
       walletid: walletId,
-      usdamount: usdAmount,
-      lydamount: lydAmount,
-      dinarprice: dinarPrice
+      currency_code: currency_code,
+      amount: amount,
+      exchange_currency_code: exchange_currency_code,
+      exchange_rate: exchange_rate,
+      total_amount: total_amount,
+      cashier_id: cashier_id, // Add cashier_id
+      source: source || 'Client', // Default source for buy transaction
+      destination: destination || wallet?.name || 'Wallet', // Default destination
+      createdat: Date.now() // Unix timestamp in milliseconds to satisfy not-null constraint
     }
     
     const { data: transaction, error } = await supabase
@@ -105,6 +138,9 @@ export async function createBuyTransaction({ walletId, usdAmount, lydAmount, din
       .single()
       
     if (error) throw error
+    
+    // Get the updated wallet data after all operations
+    const updatedWallet = await getWalletById(walletId)
     
     return {
       transaction,
@@ -120,12 +156,24 @@ export async function createBuyTransaction({ walletId, usdAmount, lydAmount, din
  * 
  * @param {Object} transactionData - Transaction data
  * @param {string} transactionData.walletId - Wallet ID
- * @param {number} transactionData.usdAmount - USD amount
- * @param {number} transactionData.lydAmount - LYD amount
- * @param {number} transactionData.dinarPrice - Dinar price
+ * @param {string} transactionData.sellCurrencyCode - Currency being sold (e.g. 'LYD')
+ * @param {number} transactionData.sellAmount - Amount of currency being sold
+ * @param {string} transactionData.receiveCurrencyCode - Currency being received (e.g. 'USD')
+ * @param {number} transactionData.receiveAmount - Amount of currency being received
+ * @deprecated Legacy USD, LYD, and dinarPrice parameters have been removed as they no longer exist in the schema
  * @returns {Promise<Object>} - Transaction result
  */
-export async function createSellTransaction({ walletId, usdAmount, lydAmount, dinarPrice }) {
+export async function createSellTransaction({ 
+  walletId, 
+  sellCurrencyCode, 
+  sellAmount, 
+  receiveCurrencyCode, 
+  receiveAmount,
+  source = null,
+  destination = null,
+  cashier_id = null
+  // dinarPrice removed as it doesn't exist in the database schema
+}) {
   try {
     // Get the wallet to update its balance
     const wallet = await getWalletById(walletId)
@@ -133,21 +181,46 @@ export async function createSellTransaction({ walletId, usdAmount, lydAmount, di
       throw new Error('Wallet not found')
     }
     
-    // Update the wallet balances
-    const updatedWallet = await updateWallet(walletId, {
-      usd: Number(wallet.usd) + Number(usdAmount),
-      lyd: Number(wallet.lyd) - Number(lydAmount)
-    })
+    // Handle dynamic currency balances using the wallet_currencies table
+    if (sellCurrencyCode && sellAmount) {
+      // Decrease the sold currency
+      await updateWalletCurrency(walletId, sellCurrencyCode, -sellAmount);
+    }
     
-    // Create the transaction record
+    if (receiveCurrencyCode && receiveAmount) {
+      // Increase the received currency
+      await updateWalletCurrency(walletId, receiveCurrencyCode, receiveAmount);
+    }
+    
+    // Legacy field updates removed as they are no longer needed
+    
+    // Get current user session if cashier_id isn't provided
+    if (!cashier_id) {
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        cashier_id = sessionData?.session?.user?.id;
+      } catch (e) {
+        console.error("Error getting user session for cashier_id:", e);
+      }
+    }
+    
+    // Create the transaction record with the actual columns from the database
     const transactionData = {
       id: generateUUID(),
       type: 'sell',
-      walletid: walletId,
-      usdamount: usdAmount,
-      lydamount: lydAmount,
-      dinarprice: dinarPrice
+      walletid: walletId, // Note: Using lowercase as per the actual schema
+      currency_code: sellCurrencyCode, 
+      amount: sellAmount,
+      exchange_currency_code: receiveCurrencyCode,
+      exchange_rate: receiveAmount / sellAmount, // Calculate the exchange rate
+      total_amount: receiveAmount,
+      cashier_id: cashier_id, // Add cashier_id
+      source: source || wallet?.name || 'Wallet', // Default source for sell transaction
+      destination: destination || 'Client', // Default destination
+      createdat: Date.now() // Unix timestamp in milliseconds to satisfy not-null constraint
     }
+    
+    console.log('Creating transaction with data:', transactionData);
     
     const { data: transaction, error } = await supabase
       .from('transactions')
@@ -155,7 +228,13 @@ export async function createSellTransaction({ walletId, usdAmount, lydAmount, di
       .select()
       .single()
       
-    if (error) throw error
+    if (error) {
+      console.error('Transaction creation error:', error);
+      throw error;
+    }
+    
+    // Get the updated wallet data after all operations
+    const updatedWallet = await getWalletById(walletId)
     
     return {
       transaction,
@@ -176,7 +255,7 @@ export async function getTransactionStats() {
     // Get recent transactions
     const { data: recentTx, error: txError } = await supabase
       .from('transactions')
-      .select('type, dinarprice')
+      .select('type, exchange_rate, currency_code, exchange_currency_code')
       .order('createdat', { ascending: false })
       .limit(30)
       
@@ -187,11 +266,11 @@ export async function getTransactionStats() {
     const sells = recentTx.filter(tx => tx.type === 'sell')
     
     const buyAverage = buys.length > 0
-      ? buys.reduce((sum, tx) => sum + Number(tx.dinarprice), 0) / buys.length
+      ? buys.reduce((sum, tx) => sum + Number(tx.exchange_rate), 0) / buys.length
       : null
       
     const sellAverage = sells.length > 0
-      ? sells.reduce((sum, tx) => sum + Number(tx.dinarprice), 0) / sells.length
+      ? sells.reduce((sum, tx) => sum + Number(tx.exchange_rate), 0) / sells.length
       : null
     
     return {

@@ -3,7 +3,7 @@ import {
   createSellTransaction 
 } from '../lib/supabase/tables/transactions.js';
 import { getAllCashCustody, giveCashCustody } from '../lib/supabase/tables/cash_custody.js';
-import { getWalletById, updateWalletCurrencyBalance } from '../lib/supabase/tables/wallets.js';
+import { getWalletById, updateWalletCurrencyBalance, updateWalletCurrency } from '../lib/supabase/tables/wallets.js';
 import { generateUUID } from '../lib/uuid.js';
 import supabase from '../lib/supabase/client.js';
 
@@ -30,14 +30,29 @@ export const transactionService = {
     if (data.destinationWallet === 'client') {
       // Client to client case - just record the transaction without updating wallets
       console.log('Client to client buy transaction');
+      
+      // Get current user session for cashier ID
+      const { data: sessionData } = await supabase.auth.getSession();
+      const user = sessionData?.session?.user;
+      
+      if (!user) {
+        throw new Error('User not authenticated');
+      }
+      
       const transactionData = {
         id: generateUUID(),
         type: 'buy',
         walletid: null, // No wallet involved
-        usdamount: data.payCurrencyCode === 'USD' ? data.total : 0,
-        lydamount: data.receiveCurrencyCode === 'LYD' ? data.amount : 0,
-        dinarprice: parseFloat(data.price),
-        client_name: data.clientName
+        currency_code: data.receiveCurrencyCode,
+        amount: parseFloat(data.amount),
+        exchange_currency_code: data.payCurrencyCode,
+        exchange_rate: parseFloat(data.price),
+        total_amount: parseFloat(data.total),
+        client_name: data.clientName,
+        cashier_id: user.id, // Add cashier ID from logged-in user
+        source: 'Client', // Client is the source in a buy transaction
+        destination: 'Wallet', // Destination is wallet/system in a buy transaction
+        createdat: Date.now() // Unix timestamp in milliseconds
       };
 
       // Insert transaction record
@@ -68,10 +83,16 @@ export const transactionService = {
         id: generateUUID(),
         type: 'buy',
         walletid: null, // No wallet involved
-        usdamount: data.payCurrencyCode === 'USD' ? data.total : 0,
-        lydamount: data.receiveCurrencyCode === 'LYD' ? data.amount : 0,
-        dinarprice: parseFloat(data.price),
-        client_name: data.clientName
+        currency_code: data.receiveCurrencyCode,
+        amount: parseFloat(data.amount),
+        exchange_currency_code: data.payCurrencyCode,
+        exchange_rate: parseFloat(data.price),
+        total_amount: parseFloat(data.total),
+        client_name: data.clientName,
+        cashier_id: user.id, // Add cashier ID from logged-in user
+        source: 'Client', // Client is the source in a buy transaction
+        destination: 'Cash Custody', // Destination is cash custody
+        createdat: Date.now() // Unix timestamp in milliseconds
       };
 
       const { data: transaction, error } = await supabase
@@ -100,11 +121,25 @@ export const transactionService = {
     else {
       // Normal wallet transaction
       console.log('Normal wallet buy transaction');
+      
+      // Get current user session for cashier ID
+      const { data: sessionData } = await supabase.auth.getSession();
+      const user = sessionData?.session?.user;
+      
+      if (!user) {
+        throw new Error('User not authenticated');
+      }
+      
       return await createBuyTransaction({
         walletId: data.destinationWallet,
-        usdAmount: data.payCurrencyCode === 'USD' ? data.total : 0,
-        lydAmount: data.receiveCurrencyCode === 'LYD' ? data.amount : 0,
-        dinarPrice: parseFloat(data.price)
+        currency_code: data.receiveCurrencyCode,
+        amount: parseFloat(data.amount),
+        exchange_currency_code: data.payCurrencyCode,
+        exchange_rate: parseFloat(data.price),
+        total_amount: parseFloat(data.total),
+        cashier_id: user.id,
+        source: 'Client',
+        destination: `Wallet (${data.destinationWallet})`
       });
     }
   },
@@ -128,14 +163,29 @@ export const transactionService = {
     if (data.sourceWallet === 'client') {
       // Client to client case - just record the transaction without updating wallets
       console.log('Client to client sell transaction');
+      
+      // Get current user session for cashier ID
+      const { data: sessionData } = await supabase.auth.getSession();
+      const user = sessionData?.session?.user;
+      
+      if (!user) {
+        throw new Error('User not authenticated');
+      }
+      
       const transactionData = {
         id: generateUUID(),
         type: 'sell',
-        walletid: null, // No wallet involved
-        usdamount: data.receiveCurrencyCode === 'USD' ? data.total : 0,
-        lydamount: data.sellCurrencyCode === 'LYD' ? data.amount : 0,
-        dinarprice: parseFloat(data.price),
-        client_name: data.clientName
+        walletid: null, // No wallet involved - lowercase as per actual schema
+        currency_code: data.sellCurrencyCode,
+        amount: parseFloat(data.amount),
+        exchange_currency_code: data.receiveCurrencyCode,
+        exchange_rate: parseFloat(data.price),
+        total_amount: parseFloat(data.total),
+        client_name: data.clientName,
+        cashier_id: user.id, // Add cashier ID from logged-in user
+        source: 'Wallet', // Wallet/system is source in a sell transaction
+        destination: 'Client', // Client is the destination in a sell transaction
+        createdat: Date.now() // Unix timestamp in milliseconds
       };
 
       // Insert transaction record
@@ -187,11 +237,17 @@ export const transactionService = {
       const transactionData = {
         id: generateUUID(),
         type: 'sell',
-        walletid: null, // No wallet involved
-        usdamount: data.receiveCurrencyCode === 'USD' ? data.total : 0,
-        lydamount: data.sellCurrencyCode === 'LYD' ? data.amount : 0,
-        dinarprice: parseFloat(data.price),
-        client_name: data.clientName
+        walletid: null, // No wallet involved - lowercase as per actual schema
+        currency_code: data.sellCurrencyCode,
+        amount: parseFloat(data.amount),
+        exchange_currency_code: data.receiveCurrencyCode,
+        exchange_rate: parseFloat(data.price),
+        total_amount: parseFloat(data.total),
+        client_name: data.clientName,
+        cashier_id: user.id, // Add cashier ID from logged-in user
+        source: 'Cash Custody', // Cash custody is the source
+        destination: 'Client', // Client is the destination
+        createdat: Date.now() // Unix timestamp in milliseconds
       };
 
       const { data: transaction, error } = await supabase
@@ -257,9 +313,13 @@ export const transactionService = {
       // First perform the regular wallet transaction
       const result = await createSellTransaction({
         walletId: data.sourceWallet,
-        usdAmount: data.receiveCurrencyCode === 'USD' ? data.total : 0,
-        lydAmount: data.sellCurrencyCode === 'LYD' ? data.amount : 0,
-        dinarPrice: parseFloat(data.price)
+        sellCurrencyCode: data.sellCurrencyCode,
+        sellAmount: parseFloat(data.amount),
+        receiveCurrencyCode: data.receiveCurrencyCode,
+        receiveAmount: parseFloat(data.total),
+        cashier_id: user.id,
+        source: `Wallet (${data.sourceWallet})`,
+        destination: 'Cash Custody'
       });
       
       // Then create custody record for the received currency
@@ -282,11 +342,24 @@ export const transactionService = {
     else {
       // Normal wallet transaction
       console.log('Normal wallet sell transaction');
+      
+      // Get current user session for cashier ID
+      const { data: sessionData } = await supabase.auth.getSession();
+      const user = sessionData?.session?.user;
+      
+      if (!user) {
+        throw new Error('User not authenticated');
+      }
+      
       return await createSellTransaction({
         walletId: data.sourceWallet,
-        usdAmount: data.receiveCurrencyCode === 'USD' ? data.total : 0,
-        lydAmount: data.sellCurrencyCode === 'LYD' ? data.amount : 0,
-        dinarPrice: parseFloat(data.price)
+        sellCurrencyCode: data.sellCurrencyCode,
+        sellAmount: parseFloat(data.amount),
+        receiveCurrencyCode: data.receiveCurrencyCode,
+        receiveAmount: parseFloat(data.total),
+        cashier_id: user.id,
+        source: `Wallet (${data.sourceWallet})`,
+        destination: 'Client'
       });
     }
   }

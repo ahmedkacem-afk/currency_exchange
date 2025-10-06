@@ -1,30 +1,6 @@
 // Enhanced migration runner that supports multiple migrations
 import { createClient } from '@supabase/supabase-js';
-import fs fro    // 4. Run the transaction validation migration
-    const transactionValidationResult = await runMigration(
-      './migrations/006_transaction_validation.sql',
-      'Transaction Validation',
-      true
-    )
-    
-    // 5. Fix schema manager SQL functions
-    const schemaManagerFixResult = await runMigration(
-      './migrations/fix_schema_manager_functions.sql',
-      'Schema Manager Functions Fix',
-      true
-    )
-    
-    console.log('All migrations completed');
-    return {
-      success: true,
-      results: {
-        multiCurrency: multiCurrencyResult,
-        cashCustody: cashCustodyResult,
-        actionPayload: actionPayloadResult,
-        transactionValidation: transactionValidationResult,
-        schemaManagerFix: schemaManagerFixResult
-      }
-    };ath from 'path';
+import fs from 'path';
 
 // Load environment variables from .env.development
 import dotenv from 'dotenv';
@@ -160,6 +136,27 @@ async function runAllMigrations() {
       true
     );
     
+    // 5. Fix the createdat timestamp in transactions table
+    const fixCreatedatResult = await runMigration(
+      './migrations/fix_transaction_createdat.sql',
+      'Fix Transaction Createdat',
+      true
+    );
+    
+    // 6. Add timestamp normalization function and trigger
+    const timestampNormalizationResult = await runMigration(
+      './migrations/timestamp_normalization.sql',
+      'Timestamp Normalization',
+      true
+    );
+    
+    // 7. Fix validatedat column in transactions table
+    const fixValidatedatResult = await runMigration(
+      './migrations/fix_transaction_validatedat.sql',
+      'Fix Transaction Validatedat',
+      true
+    );
+    
     console.log('All migrations completed');
     return {
       success: true,
@@ -167,7 +164,10 @@ async function runAllMigrations() {
         multiCurrency: multiCurrencyResult,
         cashCustody: cashCustodyResult,
         actionPayload: actionPayloadResult,
-        transactionValidation: transactionValidationResult
+        transactionValidation: transactionValidationResult,
+        fixCreatedat: fixCreatedatResult,
+        timestampNormalization: timestampNormalizationResult,
+        fixValidatedat: fixValidatedatResult
       }
     };
   } catch (error) {

@@ -109,9 +109,16 @@ export function AuthProvider({ children }) {
         let userRole = null;
         if (user) {
           try {
-            const roleData = await getUserRole(user.id);
-            userRole = roleData?.name || null;
-            console.log('User role loaded:', userRole);
+            // First try to get role directly from userData if available
+            if (userData?.role) {
+              userRole = userData.role;
+              console.log('User role loaded directly from userData:', userRole);
+            } else {
+              // Fall back to getUserRole function
+              const roleData = await getUserRole(user.id);
+              userRole = roleData?.name || null;
+              console.log('User role loaded from getUserRole:', userRole);
+            }
           } catch (roleError) {
             console.error('Error loading user role:', roleError);
           }
@@ -191,9 +198,16 @@ export function AuthProvider({ children }) {
               // Load user role
               let userRole = null;
               try {
-                const roleData = await getUserRole(session.user.id);
-                userRole = roleData?.name || null;
-                console.log('User role loaded after auth change:', userRole);
+                // First try to get role directly from userData if available
+                if (userData?.role) {
+                  userRole = userData.role;
+                  console.log('User role loaded directly from userData after auth change:', userRole);
+                } else {
+                  // Fall back to getUserRole function
+                  const roleData = await getUserRole(session.user.id);
+                  userRole = roleData?.name || null;
+                  console.log('User role loaded from getUserRole after auth change:', userRole);
+                }
               } catch (roleError) {
                 console.error('Error loading user role after auth change:', roleError);
               }

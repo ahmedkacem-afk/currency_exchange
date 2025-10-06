@@ -674,6 +674,65 @@ async function createWithdrawalTransaction(walletId, currencyCode, amount, reaso
   }
 }
 
+/**
+ * Updates a wallet currency balance by adding a delta amount
+ * 
+ * @param {string} walletId - Wallet ID
+ * @param {string} currencyCode - Currency code
+ * @param {number} deltaAmount - Amount to add (positive) or subtract (negative)
+ * @returns {Promise<Object>} - Updated wallet with all currencies
+ */
+export async function updateWalletCurrency(walletId, currencyCode, deltaAmount) {
+  try {
+    // Handle legacy fields
+    if ((currencyCode === 'USD' || currencyCode === 'LYD') && 
+        !(await hasCurrencyInWalletCurrencies(walletId, currencyCode))) {
+      // Get current wallet
+      const wallet = await getWalletById(walletId);
+      if (!wallet) {
+        throw new Error(`Wallet ${walletId} not found`);
+      }
+      
+      // Update the legacy field by adding the delta
+      const fieldName = currencyCode.toLowerCase();
+      const currentAmount = Number(wallet[fieldName] || 0);
+      const newAmount = currentAmount + Number(deltaAmount);
+      
+      // Use updateWallet to set the new value
+      const updates = {};
+      updates[fieldName] = newAmount;
+      await updateWallet(walletId, updates);
+      
+      return await getWalletById(walletId);
+    }
+    
+    // For non-legacy currencies, get the current balance first
+    const currencyRecord = await getWalletCurrency(walletId, currencyCode);
+    
+    if (!currencyRecord) {
+      // Currency doesn't exist yet, add it with the delta amount (if positive)
+      if (deltaAmount <= 0) {
+        throw new Error(`Cannot subtract from non-existent currency ${currencyCode} in wallet ${walletId}`);
+      }
+      
+      return await addCurrencyToWallet(walletId, currencyCode, deltaAmount);
+    }
+    
+    // Currency exists, update its balance
+    const currentBalance = Number(currencyRecord.balance || 0);
+    const newBalance = currentBalance + Number(deltaAmount);
+    
+    if (newBalance < 0) {
+      throw new Error(`Insufficient balance: have ${currentBalance} ${currencyCode}, tried to subtract ${Math.abs(deltaAmount)}`);
+    }
+    
+    // Update the balance
+    return await updateWalletCurrencyBalance(walletId, currencyCode, newBalance);
+  } catch (error) {
+    throw handleApiError(error, 'Update Wallet Currency Delta');
+  }
+}
+
 export default {
   getWallets,
   getWalletById,
@@ -684,6 +743,7 @@ export default {
   getWalletsSummary,
   addCurrencyToWallet,
   updateWalletCurrencyBalance,
+  updateWalletCurrency,
   removeCurrencyFromWallet,
   withdrawCurrency
 }

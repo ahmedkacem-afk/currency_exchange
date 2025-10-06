@@ -100,23 +100,35 @@ export async function assignRoleToUser(userId, roleId) {
     }
     
     // Check if current user has manager role
-    const { data: currentUserProfile } = await supabase
+    const { data: currentUserData } = await supabase
       .from('users')
-      .select('role_id')
+      .select('role, role_id')
       .eq('id', currentUser.id)
       .single();
     
-    if (!currentUserProfile) {
-      throw new Error('Current user profile not found');
+    if (!currentUserData) {
+      throw new Error('Current user not found');
     }
     
-    const { data: currentUserRole } = await supabase
-      .from('roles')
-      .select('name')
-      .eq('id', currentUserProfile.role_id)
-      .single();
+    // Check if the current user has manager role, either directly or via role_id
+    let isManager = false;
     
-    if (!currentUserRole || currentUserRole.name !== 'manager') {
+    // Check direct role field first
+    if (currentUserData.role === 'manager') {
+      isManager = true;
+    } 
+    // Check role_id if available
+    else if (currentUserData.role_id) {
+      const { data: roleData } = await supabase
+        .from('roles')
+        .select('name')
+        .eq('id', currentUserData.role_id)
+        .single();
+        
+      isManager = roleData?.name === 'manager';
+    }
+    
+    if (!isManager) {
       throw new Error('Only managers can assign roles');
     }
     
@@ -164,36 +176,43 @@ export async function getUserRole(userId = null) {
     console.log(`Roles API: Fetching user for ID: ${userId}`);
     
     // Get user with role info
-    const { data: profile, error: profileError } = await supabase
+    const { data: user, error: userError } = await supabase
       .from('users')
       .select('*') // Select all fields for debugging
       .eq('id', userId)
       .single();
     
-    console.log(`Roles API: Profile query result:`, profile);  
+    console.log(`Roles API: User query result:`, user);  
       
-    if (profileError) {
-      console.error(`Roles API: Error fetching profile:`, profileError);
-      throw profileError;
+    if (userError) {
+      console.error(`Roles API: Error fetching user:`, userError);
+      throw userError;
     }
     
-    if (!profile) {
-      console.error(`Roles API: No profile found for user ID: ${userId}`);
+    if (!user) {
+      console.error(`Roles API: No user found for ID: ${userId}`);
       return { name: null, id: null };
     }
     
-    if (!profile.role_id) {
-      console.warn(`Roles API: Profile exists but has no role_id for user ID: ${userId}`);
+    // Check for direct role string in the user record first
+    if (user.role) {
+      console.log(`Roles API: Found direct role string: ${user.role} for user ID: ${userId}`);
+      return { name: user.role, id: null };
+    }
+    
+    // If no direct role, check for role_id reference
+    if (!user.role_id) {
+      console.warn(`Roles API: User exists but has no role or role_id for user ID: ${userId}`);
       return { name: null, id: null };
     }
     
-    console.log(`Roles API: Found role_id: ${profile.role_id}, fetching role details`);
+    console.log(`Roles API: Found role_id: ${user.role_id}, fetching role details`);
     
     // Get role details
     const { data: role, error: roleError } = await supabase
       .from('roles')
       .select('*')
-      .eq('id', profile.role_id)
+      .eq('id', user.role_id)
       .single();
       
     if (roleError) {
@@ -202,7 +221,7 @@ export async function getUserRole(userId = null) {
     }
     
     if (!role) {
-      console.error(`Roles API: No role found with ID: ${profile.role_id}`);
+      console.error(`Roles API: No role found with ID: ${user.role_id}`);
       return { name: null, id: null };
     }
     

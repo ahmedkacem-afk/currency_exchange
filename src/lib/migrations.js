@@ -12,6 +12,7 @@ export async function runMigrations() {
     const results = await Promise.all([
       migrateManagerPricesFields(),
       dropProfilesTable(),
+      updateDirectRoles(),
       // Add future migrations here
     ]);
     
@@ -166,6 +167,51 @@ export async function dropProfilesTable() {
     return { migrated: true };
   } catch (error) {
     console.error('Error during drop profiles table migration:', error);
+    throw error;
+  }
+}
+
+/**
+ * Updates users table to ensure direct role strings are populated
+ */
+export async function updateDirectRoles() {
+  try {
+    console.log('Running update direct roles migration...');
+    
+    // Read the SQL file content
+    const response = await fetch('/migrations/update_users_direct_roles.sql');
+    if (!response.ok) {
+      throw new Error(`Failed to load migration file: ${response.statusText}`);
+    }
+    
+    const migrationSql = await response.text();
+    
+    // Split the SQL into separate statements
+    const statements = migrationSql
+      .replace(/--.*$/gm, '') // Remove SQL comments
+      .split(';')
+      .map(statement => statement.trim())
+      .filter(statement => statement.length > 0);
+    
+    // Execute each statement
+    for (const statement of statements) {
+      try {
+        const { error } = await supabase.rpc('exec_sql', { sql: statement + ';' });
+        
+        if (error) {
+          console.error(`Error executing SQL: ${statement}`);
+          console.error(error);
+        }
+      } catch (stmtError) {
+        console.error(`Exception executing SQL: ${statement}`);
+        console.error(stmtError);
+      }
+    }
+    
+    console.log('Update direct roles migration completed');
+    return { migrated: true };
+  } catch (error) {
+    console.error('Error during update direct roles migration:', error);
     throw error;
   }
 }
