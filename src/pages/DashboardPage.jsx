@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useI18n } from '../i18n/I18nProvider.jsx'
-import { getSummary, getAllStats, getWalletStats, getPrices, setPrices, getWallets } from '../lib/api.js'
+import { getSummary, getAllStats, getWalletStats, getPrices, setPrices, getWallets, getAllCashCustody } from '../lib/api.js'
+import { getCustodySummary } from '../lib/supabase/utils/wallet_custody_helpers'
+import { Link, useNavigate } from 'react-router-dom'
 import { Card, CardHeader, CardBody } from '../components/Card.jsx'
 import Button from '../components/Button.jsx'
 import Input from '../components/Input.jsx'
@@ -10,9 +12,12 @@ import AddCurrencyModal from '../components/AddCurrencyModal.jsx'
 import AddCurrencyButton from '../components/AddCurrencyButton.jsx'
 import SaveButton from '../components/SaveButton.jsx'
 
-function StatCard({ title, value }) {
+function StatCard({ title, value, onClick }) {
   return (
-    <div className="bg-white p-4 rounded shadow">
+    <div 
+      className={`bg-white p-4 rounded shadow ${onClick ? 'cursor-pointer hover:bg-gray-50' : ''}`}
+      onClick={onClick}
+    >
       <div className="text-sm text-gray-600">{title}</div>
       <div className="text-xl font-semibold">{value}</div>
     </div>
@@ -35,8 +40,11 @@ function Trio({ title, dataset }) {
 
 export default function DashboardPage() {
   const { t } = useI18n()
+  const navigate = useNavigate()
   const [summary, setSummary] = useState(null)
   const [wallets, setWallets] = useState([])
+  const [treasuryWallets, setTreasuryWallets] = useState([])
+  const [custodyRecords, setCustodyRecords] = useState([])
   const [selected, setSelected] = useState('')
   const [statsAll, setStatsAll] = useState(null)
   const [statsWallet, setStatsWallet] = useState(null)
@@ -63,6 +71,12 @@ export default function DashboardPage() {
         return { wallets: [] };
       }),
       
+      // Get custody records
+      getAllCashCustody().catch(error => {
+        console.error('Error loading custody records:', error);
+        return { given: [], received: [] };
+      }),
+      
       // Get stats
       getAllStats().catch(error => {
         console.error('Error loading stats:', error);
@@ -74,24 +88,56 @@ export default function DashboardPage() {
         console.error('Error loading prices:', error);
         return null;
       })
-    ]).then(([s, ws, sa, p]) => {
+    ]).then(([s, ws, custody, sa, p]) => {
       console.log('DashboardPage - All data loaded:', { 
         summary: s, 
-        wallets: ws, 
+        wallets: ws,
+        custody: custody,
         stats: sa, 
         prices: p 
       });
+      
+      // Add detailed logging for wallets structure
+      if (ws && ws.wallets) {
+        console.log('Wallets structure check:', {
+          count: ws.wallets.length,
+          firstWallet: ws.wallets[0] ? {
+            id: ws.wallets[0].id,
+            name: ws.wallets[0].name,
+            hasIsTreasury: 'is_treasury' in ws.wallets[0],
+            isTreasury: ws.wallets[0].isTreasury,
+            actualIsTreasury: ws.wallets[0].is_treasury
+          } : 'No wallets found',
+          allProps: ws.wallets[0] ? Object.keys(ws.wallets[0]) : []
+        });
+      }
       
       // Set summary data
       setSummary(s);
       
       // Extract wallets from the response
-      if (ws && ws.wallets) {
+      if (ws && ws.wallets && Array.isArray(ws.wallets)) {
         console.log('DashboardPage - Setting wallets:', ws.wallets);
+        
+        // For now, don't separate wallets since we don't have the is_treasury column
+        // Just use all wallets as regular wallets
         setWallets(ws.wallets);
+        setTreasuryWallets([]); // No treasury wallets for now
       } else {
         console.error('DashboardPage - No wallets found in response:', ws);
         setWallets([]);
+        setTreasuryWallets([]);
+      }
+      
+      // Process custody records
+      if (custody) {
+        // Combine given and received records, and add a debug log
+        const allRecords = [...(custody.given || []), ...(custody.received || [])];
+        console.log('DashboardPage - Processing custody records:', allRecords);
+        setCustodyRecords(allRecords);
+      } else {
+        console.log('DashboardPage - No custody records found');
+        setCustodyRecords([]);
       }
       
       // Set other data
@@ -113,7 +159,12 @@ export default function DashboardPage() {
     }
   }, [selected])
 
-  const selectedWallet = useMemo(() => wallets.find(w => w.id === selected), [wallets, selected])
+  const selectedWallet = useMemo(() => {
+    // Find the wallet in either regular wallets or treasury wallets
+    const wallet = [...wallets, ...treasuryWallets].find(w => w.id === selected);
+    console.log('Selected wallet:', wallet);
+    return wallet;
+  }, [wallets, treasuryWallets, selected])
 
   async function onSavePrices(e) {
     e.preventDefault()
@@ -150,6 +201,132 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
+      {/* Debt summary cards - if available */}
+      {summary?.debtSummary && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 bg-gray-50 p-4 rounded-lg border border-gray-200">
+          {/* Debts I owe */}
+          <Card>
+            <CardHeader 
+              title={summary.debtSummary.countOwed || '0'} 
+              subtitle={t('debtManagement.debtsOwed')} 
+            />
+            <CardBody className="p-0">
+              <div 
+                className="bg-gradient-to-r from-red-50 to-red-100 p-3 cursor-pointer hover:bg-red-100 rounded-b-xl"
+                onClick={() => navigate('/debt-management')}
+              >
+                {Object.entries(summary.debtSummary.totalOwed || {}).map(([code, amount]) => (
+                  <div key={code} className="flex justify-between text-sm">
+                    <span className="text-red-700">{code}:</span>
+                    <span className="font-medium text-red-800">{Number(amount).toFixed(2)}</span>
+                  </div>
+                ))}
+                {Object.keys(summary.debtSummary.totalOwed || {}).length === 0 && (
+                  <div className="text-sm text-gray-500 text-center">{t('debtManagement.noDebts')}</div>
+                )}
+              </div>
+            </CardBody>
+          </Card>
+          
+          {/* Debts others owe me */}
+          <Card>
+            <CardHeader 
+              title={summary.debtSummary.countReceivable || '0'} 
+              subtitle={t('debtManagement.debtsOwedToMe')} 
+            />
+            <CardBody className="p-0">
+              <div 
+                className="bg-gradient-to-r from-green-50 to-green-100 p-3 cursor-pointer hover:bg-green-100 rounded-b-xl"
+                onClick={() => navigate('/debt-management')}
+              >
+                {Object.entries(summary.debtSummary.totalReceivable || {}).map(([code, amount]) => (
+                  <div key={code} className="flex justify-between text-sm">
+                    <span className="text-green-700">{code}:</span>
+                    <span className="font-medium text-green-800">{Number(amount).toFixed(2)}</span>
+                  </div>
+                ))}
+                {Object.keys(summary.debtSummary.totalReceivable || {}).length === 0 && (
+                  <div className="text-sm text-gray-500 text-center">{t('debtManagement.noDebts')}</div>
+                )}
+              </div>
+            </CardBody>
+          </Card>
+        </div>
+      )}
+
+      {/* Treasury Wallets */}
+      {treasuryWallets.length > 0 && (
+        <>
+          <h2 className="text-xl font-semibold text-gray-800 mt-6 mb-4">{t('dashboard.treasuryWallets', 'Treasury Wallets')}</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            {treasuryWallets.map(wallet => (
+              <Card key={wallet.id} onClick={() => setSelectedWallet(wallet.id)}>
+                <CardHeader 
+                  title={wallet.name} 
+                  subtitle={t('dashboard.treasuryWallet', 'Treasury')} 
+                />
+                <CardBody>
+                  {Object.entries(wallet.currencies || {}).map(([code, balance]) => (
+                    <div key={code} className="flex justify-between items-center py-1 border-b border-gray-100 last:border-0">
+                      <span className="text-gray-600">{code}:</span>
+                      <span className="font-medium">{Number(balance).toFixed(2)}</span>
+                    </div>
+                  ))}
+                  {Object.keys(wallet.currencies || {}).length === 0 && (
+                    <div className="text-center text-gray-500 py-2">{t('dashboard.noFunds', 'No funds')}</div>
+                  )}
+                </CardBody>
+              </Card>
+            ))}
+          </div>
+        </>
+      )}
+
+      {/* Custody Summary */}
+      {custodyRecords.length > 0 && (
+        <>
+          <h2 className="text-xl font-semibold text-gray-800 mt-6 mb-4">{t('dashboard.custodySummary', 'Cash Custody Summary')}</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            {/* Total Active Custody Count */}
+            <Card>
+              <CardHeader 
+                title={custodyRecords.filter(c => c.status === 'active').length} 
+                subtitle={t('dashboard.activeCustodies', 'Active Custodies')} 
+              />
+              <CardBody className="bg-indigo-50 rounded-b-xl h-2"></CardBody>
+            </Card>
+            
+            {/* Custody by Currency */}
+            {(() => {
+              // Group active custody records by currency and sum amounts
+              const custodyByCurrency = custodyRecords
+                .filter(c => c.status === 'active')
+                .reduce((acc, record) => {
+                  const { currency_code, amount } = record;
+                  if (!currency_code || !amount) return acc;
+                  
+                  if (!acc[currency_code]) acc[currency_code] = 0;
+                  acc[currency_code] += Number(amount);
+                  return acc;
+                }, {});
+              
+              // Return cards for each currency
+              return Object.entries(custodyByCurrency).map(([currency, total]) => (
+                <Card key={`custody-${currency}`}>
+                  <CardHeader 
+                    title={Intl.NumberFormat().format(total)} 
+                    subtitle={`${currency} in Custody`}
+                  />
+                  <CardBody className="bg-indigo-50 rounded-b-xl h-2"></CardBody>
+                </Card>
+              ));
+            })()}
+          </div>
+        </>
+      )}
+
+      {/* Summary Totals */}
+      <h2 className="text-xl font-semibold text-gray-800 mt-6 mb-4">{t('dashboard.summaryTotals', 'Summary Totals')}</h2>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* Legacy USD card */}
         <Card>
@@ -212,45 +389,83 @@ export default function DashboardPage() {
           </div>
           
           {selectedWallet && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-              {/* Show legacy USD and LYD if present */}
-              {selectedWallet.usd !== undefined && (
-                <Card>
-                  <CardHeader 
-                    icon={<UsdIcon />} 
-                    title={Intl.NumberFormat().format(selectedWallet.usd)} 
-                    subtitle={t('dashboard.usd')} 
-                  />
-                </Card>
-              )}
-              
-              {selectedWallet.lyd !== undefined && (
-                <Card>
-                  <CardHeader 
-                    icon={<LydIcon />} 
-                    title={Intl.NumberFormat().format(selectedWallet.lyd)} 
-                    subtitle={t('dashboard.lyd')} 
-                  />
-                </Card>
-              )}
-              
-              {/* Show all other currencies from the currencies object */}
-              {selectedWallet.currencies && Object.entries(selectedWallet.currencies)
-                // Filter out USD/LYD if they're already shown from legacy fields
-                .filter(([code]) => 
-                  (code !== 'USD' || selectedWallet.usd === undefined) && 
-                  (code !== 'LYD' || selectedWallet.lyd === undefined)
-                )
-                .map(([code, balance]) => (
-                  <Card key={code}>
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                {/* Show legacy USD and LYD if present */}
+                {selectedWallet.usd !== undefined && (
+                  <Card>
                     <CardHeader 
-                      title={Intl.NumberFormat().format(balance)} 
-                      subtitle={code} 
+                      icon={<UsdIcon />} 
+                      title={Intl.NumberFormat().format(selectedWallet.usd)} 
+                      subtitle={t('dashboard.usd')} 
                     />
                   </Card>
-                ))
-              }
-            </div>
+                )}
+                
+                {selectedWallet.lyd !== undefined && (
+                  <Card>
+                    <CardHeader 
+                      icon={<LydIcon />} 
+                      title={Intl.NumberFormat().format(selectedWallet.lyd)} 
+                      subtitle={t('dashboard.lyd')} 
+                    />
+                  </Card>
+                )}
+                
+                {/* Show all other currencies from the currencies object */}
+                {selectedWallet.currencies && Object.entries(selectedWallet.currencies)
+                  // Filter out USD/LYD if they're already shown from legacy fields
+                  .filter(([code]) => 
+                    (code !== 'USD' || selectedWallet.usd === undefined) && 
+                    (code !== 'LYD' || selectedWallet.lyd === undefined)
+                  )
+                  .map(([code, balance]) => (
+                    <Card key={code}>
+                      <CardHeader 
+                        title={Intl.NumberFormat().format(balance)} 
+                        subtitle={code} 
+                      />
+                    </Card>
+                  ))
+                }
+              </div>
+              
+              {/* Show Custody Information if available */}
+              {selectedWallet.custodyBalances && Object.keys(selectedWallet.custodyBalances).length > 0 && (
+                <div className="mt-6">
+                  <h3 className="text-lg font-medium text-gray-700 mb-3">{t('dashboard.cashInCustody', 'Cash In Custody')}</h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                    {Object.entries(selectedWallet.custodyBalances).map(([code, amount]) => (
+                      <Card key={`custody-${code}`}>
+                        <CardHeader 
+                          title={Intl.NumberFormat().format(amount)} 
+                          subtitle={`${code} in Custody`} 
+                        />
+                        <CardBody className="bg-indigo-50 rounded-b-xl h-2"></CardBody>
+                      </Card>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
+              {/* Show Total (Wallet + Custody) if custody exists */}
+              {selectedWallet.totalWithCustody && (
+                <div className="mt-6">
+                  <h3 className="text-lg font-medium text-gray-700 mb-3">{t('dashboard.totalWithCustody', 'Total (Wallet + Custody)')}</h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                    {Object.entries(selectedWallet.totalWithCustody).map(([code, total]) => (
+                      <Card key={`total-${code}`}>
+                        <CardHeader 
+                          title={Intl.NumberFormat().format(total)} 
+                          subtitle={`Total ${code}`} 
+                        />
+                        <CardBody className="bg-green-100 rounded-b-xl h-2"></CardBody>
+                      </Card>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </CardBody>
       </Card>
@@ -386,10 +601,28 @@ export default function DashboardPage() {
           // Refresh wallet data after adding a currency
           const refreshData = async () => {
             try {
-              const [s, ws] = await Promise.all([getSummary(), getWallets()]);
+              const [s, ws, custody] = await Promise.all([
+                getSummary(),
+                getWallets(),
+                getAllCashCustody()
+              ]);
+              
               setSummary(s);
+              
+              // Process wallets
               if (ws && ws.wallets) {
-                setWallets(ws.wallets);
+                // Separate treasury wallets
+                const treasuryWalletsList = ws.wallets.filter(w => w.isTreasury);
+                const normalWallets = ws.wallets.filter(w => !w.isTreasury);
+                
+                setTreasuryWallets(treasuryWalletsList);
+                setWallets(normalWallets);
+              }
+              
+              // Process custody records
+              if (custody) {
+                const allRecords = [...(custody.given || []), ...(custody.received || [])];
+                setCustodyRecords(allRecords);
               }
             } catch (err) {
               console.error('Error refreshing data:', err);

@@ -83,6 +83,14 @@ export async function getCurrentSession() {
   try {
     const { data, error } = await supabase.auth.getSession()
     if (error) throw error
+    
+    // Log session status for debugging
+    if (data?.session) {
+      console.log('Auth: Valid session found, expires at:', new Date(data.session.expires_at * 1000).toLocaleString());
+    } else {
+      console.log('Auth: No active session found');
+    }
+    
     return data?.session || null
   } catch (error) {
     console.error('Error getting current session:', error)

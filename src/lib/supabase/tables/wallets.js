@@ -6,25 +6,32 @@
 
 import supabase, { handleApiError } from '../client'
 import { generateUUID } from '../../uuid'
+import { calculateCustodyTotalsByWallet, mergeWalletWithCustody } from '../utils/wallet_custody_helpers'
 
 /**
- * Gets all wallets with their currencies
+ * Gets all wallets with their currencies and custody information
  * 
- * @returns {Promise<Object[]>} - Array of wallets with currencies
+ * @returns {Promise<Object[]>} - Array of wallets with currencies and custody info
  */
 export async function getWallets() {
   try {
     // First get all wallets with legacy fields
     console.log('Wallets API: Fetching wallets from Supabase...');
-    const { data: wallets, error } = await supabase
+    
+    // Get minimal columns to avoid issues with missing columns
+    let walletsResponse = await supabase
       .from('wallets')
-      .select('id, name, usd, lyd')
-      .order('name', { ascending: true })
-      
-    if (error) {
-      console.error('Wallets API: Error fetching wallets:', error);
-      throw error;
+      .select('*')
+      .order('name', { ascending: true });
+    
+    // Check for any errors
+    if (walletsResponse.error) {
+      console.error('Wallets API: Error fetching wallets:', walletsResponse.error);
+      throw walletsResponse.error;
     }
+    
+    // Extract wallets from response
+    const wallets = walletsResponse.data;
     
     if (!wallets || wallets.length === 0) {
       console.log('Wallets API: No wallets found');
@@ -33,8 +40,25 @@ export async function getWallets() {
     
     console.log('Wallets API: Found', wallets.length, 'wallets');
     
+    // Get custody records
+    const { data: custodyRecords, error: custodyError } = await supabase
+      .from('cash_custody')
+      .select('*')
+      .eq('status', 'active');
+      
+    if (custodyError) {
+      console.warn('Wallets API: Error fetching custody records:', custodyError);
+    }
+    
+    // Calculate custody totals for all wallets
+    // Process custody records to get summary
+    const activeCustodyRecords = custodyRecords?.filter(record => record.status === 'active') || [];
+    
+    // Get custody totals for all wallets
+    const custodyTotals = calculateCustodyTotalsByWallet(activeCustodyRecords, wallets);
+    
     // Initialize all wallets with their legacy currencies
-    const walletsWithCurrencies = wallets.map(wallet => {
+    let walletsWithCurrencies = wallets.map(wallet => {
       // Create initial currencies object with legacy fields
       const currencies = {};
       
@@ -88,7 +112,18 @@ export async function getWallets() {
       console.warn('Wallets API: Error fetching wallet currencies (continuing with legacy fields):', currencyError);
     }
     
-    console.log('Wallets API: Returning', walletsWithCurrencies.length, 'wallets with currencies');
+    // Add custody information to each wallet
+    walletsWithCurrencies = walletsWithCurrencies.map(wallet => {
+      // Use the helper to merge wallet with custody data
+      const walletWithCustody = mergeWalletWithCustody(wallet, custodyTotals);
+      
+      // Mark if this is a treasury wallet - safely handle if the column doesn't exist
+      walletWithCustody.isTreasury = wallet.is_treasury === true || wallet.treasury_wallet_id != null;
+      
+      return walletWithCustody;
+    });
+    
+    console.log('Wallets API: Returning', walletsWithCurrencies.length, 'wallets with currencies and custody info');
     return { wallets: walletsWithCurrencies }
   } catch (error) {
     console.error('Wallets API: Error in getWallets:', error);
@@ -268,11 +303,15 @@ export async function getWalletStats(walletId) {
     // Get wallet info
     const { data: wallet, error: walletError } = await supabase
       .from('wallets')
-      .select('id, name, usd, lyd')
+      .select('id, name, usd, lyd, is_treasury, user_id')
       .eq('id', walletId)
       .single()
       
     if (walletError) throw walletError
+    
+    // Get custody totals for this wallet
+    const custodyTotals = await getCustodyTotalsByWallet();
+    const walletCustodyBalances = custodyTotals[walletId] || {};
     
     // Get recent transactions for this wallet
     const { data: transactions, error: txError } = await supabase
@@ -304,11 +343,28 @@ export async function getWalletStats(walletId) {
       median: sellPrices[Math.floor(sellPrices.length / 2)] || sellPrices[0]
     } : null
     
+    // Get custody records for this wallet
+    const { data: custodyRecords, error: custodyError } = await supabase
+      .from('cash_custody')
+      .select('*')
+      .eq('wallet_id', walletId)
+      .order('created_at', { ascending: false });
+      
+    if (custodyError) {
+      console.warn('Wallets API: Error fetching custody records:', custodyError);
+    }
+    
+    // Add custody information to the wallet object
+    wallet.isTreasury = !!wallet.is_treasury;
+    wallet.custodyBalances = walletCustodyBalances;
+    
     return {
       wallet,
       transactions,
       buy,
-      sell
+      sell,
+      custodyRecords: custodyRecords || [],
+      custodyBalances: walletCustodyBalances
     }
   } catch (error) {
     throw handleApiError(error, 'Get Wallet Stats')

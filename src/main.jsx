@@ -65,10 +65,24 @@ if (!supabaseUrl || !supabaseKey) {
   // Run initialization but don't wait for it to render the app
   initializeApp();
   
+  // Handle redirects from 404.html
+  const handleRedirectFromNotFound = () => {
+    const redirectPath = window.sessionStorage.getItem('redirectPath');
+    if (redirectPath) {
+      window.sessionStorage.removeItem('redirectPath');
+      console.log('Handling redirect from 404 page to:', redirectPath);
+      // The BrowserRouter will use this path when it initializes
+      window.history.replaceState(null, '', redirectPath);
+    }
+  };
+
+  // Handle potential redirects before rendering
+  handleRedirectFromNotFound();
+
   // Render the app immediately
   ReactDOM.createRoot(document.getElementById('root')).render(
     <React.StrictMode>
-      <BrowserRouter>
+      <BrowserRouter basename="/">
         <App />
       </BrowserRouter>
     </React.StrictMode>,

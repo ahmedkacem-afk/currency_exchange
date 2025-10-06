@@ -9,7 +9,7 @@ export function Layout({ children }) {
   const { t, lang, dir } = useI18n();
   const [open, setOpen] = useState(false);
   const location = useLocation();
-  const { session, isAuthenticated, profile } = useAuth();
+  const { session, isAuthenticated, userData } = useAuth();
 
   useEffect(() => {
     document.documentElement.dir = dir;
@@ -23,7 +23,7 @@ export function Layout({ children }) {
       <Header 
         isAuthenticated={isAuthenticated} 
         isLogin={isLogin} 
-        profile={profile} 
+        profile={userData} 
         toggleSidebar={() => setOpen(o => !o)}
       />
 
@@ -31,7 +31,7 @@ export function Layout({ children }) {
         <Sidebar 
           isOpen={open} 
           setIsOpen={setOpen} 
-          profile={profile} 
+          profile={userData} 
           dir={dir}
         />
       )}

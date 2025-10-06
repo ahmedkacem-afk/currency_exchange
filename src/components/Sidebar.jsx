@@ -81,6 +81,92 @@ export function Sidebar({ isOpen, setIsOpen, profile, dir }) {
                   </div>
                 )}
               </NavLink>
+              <NavLink onClick={() => setIsOpen(false)} to="/cashier">
+                {({ isActive }) => (
+                  <div className={`px-4 py-3 rounded-lg flex items-center transition-colors ${isActive ? 'bg-emerald-600 text-white shadow-sm' : 'text-emerald-900 hover:bg-emerald-50'}`}>
+                    <svg className={`w-5 h-5 mr-2.5 ${isActive ? 'text-emerald-100' : 'text-emerald-500'}`} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="2" y="4" width="20" height="16" rx="2" ry="2"></rect>
+                      <line x1="12" y1="4" x2="12" y2="20"></line>
+                      <path d="M6 8h4"></path>
+                      <path d="M6 12h4"></path>
+                      <path d="M6 16h4"></path>
+                    </svg>
+                    <span>{t('nav.cashier')}</span>
+                  </div>
+                )}
+              </NavLink>
+              <NavLink onClick={() => setIsOpen(false)} to="/treasurer">
+                {({ isActive }) => (
+                  <div className={`px-4 py-3 rounded-lg flex items-center transition-colors ${isActive ? 'bg-emerald-600 text-white shadow-sm' : 'text-emerald-900 hover:bg-emerald-50'}`}>
+                    <svg className={`w-5 h-5 mr-2.5 ${isActive ? 'text-emerald-100' : 'text-emerald-500'}`} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 2v20m-9-7l18 0m-9-13l-9 13h18l-9-13z"></path>
+                    </svg>
+                    <span>{t('nav.treasurer')}</span>
+                  </div>
+                )}
+              </NavLink>
+              <NavLink onClick={() => setIsOpen(false)} to="/treasurer-demo">
+                {({ isActive }) => (
+                  <div className={`px-4 py-3 rounded-lg flex items-center transition-colors ${isActive ? 'bg-emerald-600 text-white shadow-sm' : 'text-emerald-900 hover:bg-emerald-50'}`}>
+                    <svg className={`w-5 h-5 mr-2.5 ${isActive ? 'text-emerald-100' : 'text-emerald-500'}`} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 2v20m-9-7l18 0m-9-13l-9 13h18l-9-13z"></path>
+                    </svg>
+                    <span>Treasurer Demo</span>
+                  </div>
+                )}
+              </NavLink>
+              <NavLink onClick={() => setIsOpen(false)} to="/dealership-executioner">
+                {({ isActive }) => (
+                  <div className={`px-4 py-3 rounded-lg flex items-center transition-colors ${isActive ? 'bg-emerald-600 text-white shadow-sm' : 'text-emerald-900 hover:bg-emerald-50'}`}>
+                    <svg className={`w-5 h-5 mr-2.5 ${isActive ? 'text-emerald-100' : 'text-emerald-500'}`} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
+                      <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
+                      <path d="M9 14l2 2 4-4"></path>
+                    </svg>
+                    <span>{t('nav.executioner')}</span>
+                  </div>
+                )}
+              </NavLink>
+              <NavLink onClick={() => setIsOpen(false)} to="/debt-management">
+                {({ isActive }) => (
+                  <div className={`px-4 py-3 rounded-lg flex items-center transition-colors ${isActive ? 'bg-emerald-600 text-white shadow-sm' : 'text-emerald-900 hover:bg-emerald-50'}`}>
+                    <svg className={`w-5 h-5 mr-2.5 ${isActive ? 'text-emerald-100' : 'text-emerald-500'}`} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 4H3a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h18a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"></path>
+                      <path d="M16 2v4"></path>
+                      <path d="M8 2v4"></path>
+                      <path d="M12 14v4"></path>
+                      <path d="M12 10v2"></path>
+                    </svg>
+                    <span>{t('nav.debtManagement')}</span>
+                  </div>
+                )}
+              </NavLink>
+              <NavLink onClick={() => setIsOpen(false)} to="/custody-management">
+                {({ isActive }) => (
+                  <div className={`px-4 py-3 rounded-lg flex items-center transition-colors ${isActive ? 'bg-emerald-600 text-white shadow-sm' : 'text-emerald-900 hover:bg-emerald-50'}`}>
+                    <svg className={`w-5 h-5 mr-2.5 ${isActive ? 'text-emerald-100' : 'text-emerald-500'}`} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M19 5v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5"></path>
+                      <polyline points="17 5 12 1 7 5"></polyline>
+                      <path d="M12 12v6"></path>
+                      <path d="M9 12h6"></path>
+                    </svg>
+                    <span>{t('nav.cashCustody')}</span>
+                  </div>
+                )}
+              </NavLink>
+              <NavLink onClick={() => setIsOpen(false)} to="/user-management">
+                {({ isActive }) => (
+                  <div className={`px-4 py-3 rounded-lg flex items-center transition-colors ${isActive ? 'bg-emerald-600 text-white shadow-sm' : 'text-emerald-900 hover:bg-emerald-50'}`}>
+                    <svg className={`w-5 h-5 mr-2.5 ${isActive ? 'text-emerald-100' : 'text-emerald-500'}`} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                      <circle cx="9" cy="7" r="4"></circle>
+                      <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                      <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                    </svg>
+                    <span>{t('nav.userManagement')}</span>
+                  </div>
+                )}
+              </NavLink>
             </nav>
           </div>
           

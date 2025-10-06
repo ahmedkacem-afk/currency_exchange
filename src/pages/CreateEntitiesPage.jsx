@@ -13,7 +13,7 @@ import CurrencySelect from '../components/CurrencySelect.jsx'
 
 export default function CreateEntitiesPage() {
   const { t } = useI18n()
-  const { profile } = useAuth()
+  const { userData } = useAuth()
   
   // Wallet form
   const [wName, setWName] = useState('')
@@ -28,7 +28,7 @@ export default function CreateEntitiesPage() {
   const [uEmail, setUEmail] = useState('')
   const [uPhone, setUPhone] = useState('')
   const [uPass, setUPass] = useState('')
-  const [uRole, setURole] = useState('user')
+  const [uRole, setURole] = useState('')
   
   // Operation form
   const [opName, setOpName] = useState('')
@@ -109,7 +109,7 @@ export default function CreateEntitiesPage() {
       // Create user with auth integration - this will:
       // 1. Create the user in Supabase Auth with a UUID
       // 2. Create a profile in the users table with the same UUID
-      const { user } = await createUser({ 
+      const { user, message } = await createUser({ 
         name: uName, 
         email: uEmail, 
         phone: uPhone, 
@@ -119,14 +119,20 @@ export default function CreateEntitiesPage() {
       
       // Success - the auth ID is automatically used as the user ID in the users table
       setMsg(`User "${user.name}" created successfully with ID: ${user.id}`)
-      show(`User "${user.name}" created successfully`, 'success')
+      
+      // Check if email verification is needed
+      if (user.needsEmailVerification) {
+        show(`User "${user.name}" created successfully. Email verification is required before login.`, 'info')
+      } else {
+        show(`User "${user.name}" created successfully`, 'success')
+      }
       
       // Reset form
       setUName(''); 
       setUEmail(''); 
       setUPhone(''); 
       setUPass(''); 
-      setURole('user')
+      setURole('')
     } catch (error) {
       console.error('Error creating user:', error)
       

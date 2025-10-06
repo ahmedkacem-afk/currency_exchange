@@ -4,6 +4,7 @@ import { useI18n } from '../i18n/I18nProvider';
 import { MenuIcon, KeyIcon, LogoutIcon } from './Icons';
 import { supabase } from '../lib/supabase';
 import Button from './Button';
+import NotificationsPanel from './NotificationsPanel';
 
 export function Header({ isAuthenticated, isLogin, profile, toggleSidebar }) {
   const { t, lang, toggleLang } = useI18n();
@@ -19,7 +20,17 @@ export function Header({ isAuthenticated, isLogin, profile, toggleSidebar }) {
                 <NavLink to="/" end className={({ isActive }) => `px-3 py-1.5 rounded-md border ${isActive ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-gray-800 border-gray-200 hover:bg-gray-50'}`}>{t('nav.dashboard')}</NavLink>
                 <NavLink to="/withdrawals" className={({ isActive }) => `px-3 py-1.5 rounded-md border ${isActive ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-gray-800 border-gray-200 hover:bg-gray-50'}`}>{t('nav.withdrawals')}</NavLink>
                 <NavLink to="/create" className={({ isActive }) => `px-3 py-1.5 rounded-md border ${isActive ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-gray-800 border-gray-200 hover:bg-gray-50'}`}>{t('nav.create')}</NavLink>
+                <NavLink to="/cashier" className={({ isActive }) => `px-3 py-1.5 rounded-md border ${isActive ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-gray-800 border-gray-200 hover:bg-gray-50'}`}>{t('nav.cashier')}</NavLink>
+                <NavLink to="/dealership-executioner" className={({ isActive }) => `px-3 py-1.5 rounded-md border ${isActive ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-gray-800 border-gray-200 hover:bg-gray-50'}`}>{t('nav.executioner')}</NavLink>
+                <NavLink to="/debt-management" className={({ isActive }) => `px-3 py-1.5 rounded-md border ${isActive ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-gray-800 border-gray-200 hover:bg-gray-50'}`}>{t('nav.debtManagement')}</NavLink>
+                <NavLink to="/treasurer" className={({ isActive }) => `px-3 py-1.5 rounded-md border ${isActive ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-gray-800 border-gray-200 hover:bg-gray-50'}`}>{t('nav.treasurer')}</NavLink>
               </nav>
+              {/* Notifications */}
+              <div className="hidden md:block">
+                <NotificationsPanel />
+              </div>
+              
+              {/* User menu */}
               <div className="hidden md:block relative group">
                 <button className="flex items-center gap-1 px-3 py-1.5 rounded-md border border-gray-200 hover:bg-gray-50">
                   <span className="text-sm truncate max-w-[100px]">{profile?.name || t('nav.account')}</span>

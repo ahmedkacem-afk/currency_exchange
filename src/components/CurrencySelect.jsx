@@ -11,6 +11,7 @@ import { getAllCurrencyTypes } from '../lib/api.js'
  * @param {boolean} [props.required] - Whether the field is required
  * @param {Object} [props.excludeCurrencies] - Object of currency codes to exclude {USD: true, EUR: true}
  * @param {Array} [props.includeOnlyCodes] - Array of currency codes to include, takes precedence over excludeCurrencies
+ * @param {Array} [props.customCurrencies] - Custom array of currencies to use instead of loading from API
  * @returns {JSX.Element} The currency select component
  */
 export default function CurrencySelect({ 
@@ -19,7 +20,8 @@ export default function CurrencySelect({
   label = 'Currency',
   required = false,
   excludeCurrencies = {},
-  includeOnlyCodes = []
+  includeOnlyCodes = [],
+  customCurrencies = null
 }) {
   const [currencies, setCurrencies] = useState([])
   const [loading, setLoading] = useState(false)
@@ -27,6 +29,14 @@ export default function CurrencySelect({
   
   useEffect(() => {
     async function loadCurrencies() {
+      // If customCurrencies are provided, use those directly
+      if (customCurrencies) {
+        console.log('CurrencySelect - Using custom currencies:', customCurrencies);
+        setCurrencies(customCurrencies);
+        setLoading(false);
+        return;
+      }
+      
       setLoading(true)
       setError(null)
       
@@ -56,11 +66,11 @@ export default function CurrencySelect({
       }
     }
     
-    // Only load currencies once when the component mounts
+    // Only load currencies once when the component mounts or when customCurrencies changes
     loadCurrencies()
-    // Don't include includeOnlyCodes in the dependency array as it causes infinite loops
+    // Include customCurrencies in dependency array to reload if they change
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [customCurrencies])
   
   // Use useMemo to compute filtered currencies only when dependencies change
   const filteredCurrencies = useMemo(() => {

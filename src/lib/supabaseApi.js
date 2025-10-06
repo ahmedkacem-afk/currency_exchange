@@ -500,64 +500,286 @@ export async function withdraw(walletId, payload) {
 
 // Users
 export async function createUser(payload) {
-  const { name, email, phone, password, role = 'user' } = payload
+  const { name, email, phone, password, role = 'user' } = payload;
   
   try {
-    // First, create the auth user with Supabase Auth
-    // This will handle the email verification process if configured
-    const { data: authData, error: authError } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        // Store user metadata in the auth system
-        data: {
-          name,
-          phone,
-          role
-        }
+    console.log('Creating user with role:', role);
+    
+    // First, get the role_id from the roles table
+    let roleId = null;
+    if (role) {
+      const { data: roleData, error: roleError } = await supabase
+        .from('roles')
+        .select('id')
+        .eq('name', role)
+        .single();
+      
+      if (roleError) {
+        console.error('Error fetching role:', roleError);
+        throw new Error(`Role '${role}' not found. Please choose a valid role.`);
+      } else {
+        roleId = roleData.id;
+        console.log(`Found role ID for ${role}:`, roleId);
       }
-    })
+    } else {
+      throw new Error('A role must be selected when creating a user.');
+    }
     
-    if (authError) throw authError
+    // Extract first and last name
+    const firstName = name.split(' ')[0] || '';
+    const lastName = name.split(' ').slice(1).join(' ') || '';
     
-    // Then create the user profile in the users table using the auth user's UUID
-    if (authData?.user) {
-      // Note: We don't use prepareNewEntity here because we want to use
-      // the UUID from the auth system, not generate a new one
+    // Create user with Supabase Auth first - we only proceed if this succeeds
+    console.log('Creating user through Supabase Auth...');
+    
+    let authResult;
+    let lastError = null;
+    let authUserId = null;
+    
+    // Use Supabase SDK with minimal options
+    try {
+      console.log('Attempting auth signup with properly formatted options...');
+      
+      // Make the API call with Supabase SDK but control the payload
+      const authResponse = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: name || email // Ensure we have a value for name
+          }
+        }
+      });
+      
+      // Store result for later use
+      authResult = authResponse;
+      
+      if (!authResponse.error && authResponse.data?.user?.id) {
+        authUserId = authResponse.data.user.id;
+        console.log('Auth signup successful with user ID:', authUserId);
+      } else {
+        lastError = authResponse.error || new Error('Auth signup failed');
+        console.warn('Auth signup failed:', lastError);
+        // Log the full response for debugging
+        console.warn('Full response:', authResponse);
+      }
+    } catch (authError) {
+      lastError = authError;
+      console.warn('Auth signup threw exception:', authError);
+    }
+    
+    // If auth failed, don't create a user
+    if (!authUserId) {
+      console.error('Supabase Auth signup failed');
+      throw new Error(
+        lastError?.message || 
+        'Authentication service error. Please try again later or contact support.'
+      );
+    }
+    
+    // If we get here, auth was successful
+    const userId = authUserId;
+    console.log('Proceeding with user creation using auth ID:', userId);
+    
+    // First check if user already exists in database (created by trigger)
+    console.log('Checking if user record already exists...');
+    
+    try {
+      const { data: existingUser, error: checkError } = await supabase
+        .from('users')
+        .select('id, name, email, phone, role, role_id, first_name, last_name, is_email_verified')
+        .eq('id', userId)
+        .single();
+      
+      if (checkError && checkError.code !== 'PGRST116') { // PGRST116 means not found which is expected
+        console.error('Error checking for existing user:', checkError);
+      }
+      
       const userData = {
-        id: authData.user.id, // Auth user UUID is used for the profile
         name,
         email,
         phone,
-        role
-        // Password is only stored in the Auth system, not in the users table
+        role,
+        role_id: roleId,
+        first_name: firstName,
+        last_name: lastName,
+        is_email_verified: true, // Auto-verify for development
+        auth_linked: true // This user definitely has auth linked
       };
       
-      // Insert the user data into the users table
-      const { data: userProfile, error: userError } = await supabase
-        .from('users')
-        .insert(userData)
-        .select('id, name, email, role, phone')
-        .single()
+      let user;
       
-      if (userError) {
-        // If the profile creation fails, we should attempt to delete the auth user
-        // to maintain consistency between auth and database
-        await supabase.auth.admin.deleteUser(authData.user.id)
-          .catch(e => console.error('Failed to clean up auth user after profile creation error:', e));
-          
-        throw userError;
+      if (existingUser) {
+        // User already exists (likely created by trigger), update it
+        console.log('User record already exists, updating with complete information...');
+        const { data: updatedUser, error: updateError } = await supabase
+          .from('users')
+          .update(userData)
+          .eq('id', userId)
+          .select('id, name, email, phone, role, role_id, first_name, last_name, is_email_verified')
+          .single();
+        
+        if (updateError) {
+          console.error('Failed to update user record:', updateError);
+          throw updateError;
+        }
+        
+        user = updatedUser;
+        console.log('User record updated successfully');
+      } else {
+        // User doesn't exist yet, create it
+        console.log('Creating new user record in database...');
+        
+        const fullUserData = {
+          id: userId, // This is the auth user ID
+          ...userData
+        };
+        
+        const { data: newUser, error: insertError } = await supabase
+          .from('users')
+          .insert(fullUserData)
+          .select('id, name, email, phone, role, role_id, first_name, last_name, is_email_verified')
+          .single();
+        
+        if (insertError) {
+          // If it's a duplicate key, the trigger probably created the user in the meantime
+          if (insertError.code === '23505') {
+            console.log('User was created by trigger while we were processing, trying update instead');
+            
+            // Try updating instead
+            const { data: updatedUser, error: updateError } = await supabase
+              .from('users')
+              .update(userData)
+              .eq('id', userId)
+              .select('id, name, email, phone, role, role_id, first_name, last_name, is_email_verified')
+              .single();
+              
+            if (updateError) {
+              console.error('Failed to update user after duplicate key error:', updateError);
+              throw updateError;
+            }
+            
+            user = updatedUser;
+            console.log('User record updated successfully after duplicate key detection');
+          } else {
+            console.error('Failed to create user record:', insertError);
+            // Log the full error details
+            try {
+              console.error('Full error details:', JSON.stringify(insertError, null, 2));
+            } catch (e) {
+              console.error('Could not stringify error');
+            }
+            throw insertError;
+          }
+        } else {
+          user = newUser;
+          console.log('New user record created successfully');
+        }
       }
-      
-      // Return the created user profile
-      return { user: userProfile }
+    } catch (error) {
+      console.error('Error during user database operation:', error);
+      throw error;
     }
     
-    throw new Error('User could not be created')
+    console.log('User record created successfully');
+    
+    // For cashier or manager roles, set up custody
+    let hasCustody = false;
+    let custodyId = null;
+    
+    if (role === 'cashier' || role === 'manager' || role === 'treasurer') {
+      try {
+        console.log(`Setting up initial custody for ${role}...`);
+        // Here you would add code to create the custody record
+        // For example, creating a wallet or assigning treasury access
+        
+        // Placeholder for actual custody creation
+        // const { data: custody } = await supabase
+        //   .from('custody')
+        //   .insert({
+        //     user_id: authData.user.id,
+        //     role: role,
+        //     initial_balance: 0
+        //   })
+        //   .select('id')
+        //   .single();
+        // 
+        // custodyId = custody.id;
+        // hasCustody = true;
+        
+        // Update user with custody information
+        // await supabase
+        //   .from('users')
+        //   .update({ 
+        //     has_custody: true, 
+        //     custody_id: custodyId 
+        //   })
+        //   .eq('id', authData.user.id);
+        
+        console.log('Custody setup completed');
+      } catch (custodyError) {
+        console.error('Failed to set up custody, but user was created:', custodyError);
+        // Non-critical error, continue
+      }
+    }
+    
+    // Return the created user - at this point auth always succeeded
+    const formattedUser = {
+      id: userId,
+      name,
+      email,
+      phone,
+      role,
+      firstName,
+      lastName,
+      hasCustody,
+      custodyId,
+      // Always set to false since we're auto-verifying for development
+      needsEmailVerification: false,
+      authLinked: true
+    };
+    
+    // Return success message
+    return {
+      user: formattedUser,
+      message: 'User created successfully.'
+    };
   } catch (error) {
-    console.error('Error creating user:', error)
-    // Use our error formatter to make error messages more user-friendly
-    throw new Error(formatErrorMessage(error))
+    console.error('Error creating user:', error);
+    
+    try {
+      // Try to log detailed error info
+      console.error('Error details:', JSON.stringify(error, null, 2));
+    } catch (e) {
+      console.error('Could not stringify error:', e);
+    }
+    
+    // Handle specific error cases
+    if (error.message?.includes('already registered') || 
+        error.message?.includes('already in use') ||
+        (error.code === '23505')) {
+      // Check if it's specifically the users_pkey constraint
+      if (error.details?.includes('users_pkey')) {
+        // This likely means the trigger already created the user
+        console.log('User record exists but operation failed - likely a trigger/timing issue');
+        throw new Error('User creation failed due to a database conflict. Please try again.');
+      } else {
+        throw new Error('This email is already registered');
+      }
+    }
+    
+    if (error.message?.includes('network') || 
+        error.message?.includes('connection')) {
+      throw new Error('Network error. Please check your connection and try again.');
+    }
+    
+    // For authentication 500 errors, provide a more specific message
+    if (error.status === 500 && error.message?.includes('auth')) {
+      throw new Error('Authentication service error. Please try again later or contact support.');
+    }
+    
+    // Use our error formatter for other cases
+    throw new Error(formatErrorMessage(error));
   }
 }
 

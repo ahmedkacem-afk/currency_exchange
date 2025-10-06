@@ -1,0 +1,401 @@
+/**
+ * Cash Custody API
+ * 
+ * This module handles all database operations related to cash custody management
+ */
+
+import supabase, { handleApiError, sanitizeJsonData } from '../client'
+import { generateUUID } from '../../uuid'
+import { getWalletById, updateWalletCurrencyBalance } from './wallets'
+
+/**
+ * Get all cash custody records for the current user
+ * 
+ * @returns {Promise<Object>} - Object containing given and received custody records
+ */
+export async function getAllCashCustody() {
+  try {
+    console.log('Cash Custody API: Fetching all custody records...');
+    
+    // Get user ID from session - handle potential errors more gracefully
+    const { data: sessionData } = await supabase.auth.getSession();
+    const user = sessionData?.session?.user;
+    
+    if (!user || !user.id) {
+      console.error('Cash Custody API: No authenticated user found in getAllCashCustody');
+      throw new Error('User not authenticated');
+    }
+    
+    console.log('Cash Custody API: Fetching custody records for user ID:', user.id);
+    
+    // Get both types of custody records in parallel
+    const [givenResponse, receivedResponse] = await Promise.all([
+      // Custody given to cashiers (user is the treasurer)
+      supabase
+        .from('cash_custody')
+        .select('*, cashier:cashier_id(*), treasurer:treasurer_id(*), wallet:wallet_id(*)')
+        .eq('treasurer_id', user.id)
+        .order('created_at', { ascending: false }),
+      
+      // Custody received from treasurer (user is the cashier)
+      supabase
+        .from('cash_custody')
+        .select('*, cashier:cashier_id(*), treasurer:treasurer_id(*), wallet:wallet_id(*)')
+        .eq('cashier_id', user.id)
+        .order('created_at', { ascending: false })
+    ]);
+    
+    // Check for errors
+    if (givenResponse.error) throw givenResponse.error;
+    if (receivedResponse.error) throw receivedResponse.error;
+    
+    console.log(`Cash Custody API: Found ${givenResponse.data.length} given records and ${receivedResponse.data.length} received records`);
+    
+    return {
+      given: givenResponse.data || [],
+      received: receivedResponse.data || []
+    };
+  } catch (error) {
+    console.error('Cash Custody API: Error in getAllCashCustody:', error);
+    throw handleApiError(error, 'Get All Cash Custody');
+  }
+}
+
+/**
+ * Give cash custody to a cashier
+ * 
+ * @param {Object} custodyData - Cash custody data
+ * @param {string} custodyData.cashierId - ID of the cashier receiving custody
+ * @param {string} custodyData.walletId - ID of the wallet to use
+ * @param {string} custodyData.currencyCode - Currency code
+ * @param {number} custodyData.amount - Amount to give
+ * @param {string} custodyData.notes - Optional notes
+ * @param {boolean} custodyData.requireApproval - Whether this custody request requires approval
+ * @returns {Promise<Object>} - Created cash custody record
+ */
+export async function giveCashCustody({
+  cashierId,
+  walletId,
+  currencyCode,
+  amount,
+  notes,
+  requireApproval = true
+}) {
+  try {
+    // Validate input
+    if (!cashierId) throw new Error('Cashier is required');
+    if (!walletId) throw new Error('Wallet is required');
+    if (!currencyCode) throw new Error('Currency is required');
+    if (!amount || isNaN(Number(amount)) || Number(amount) <= 0) {
+      throw new Error('Valid amount is required');
+    }
+    
+    // Get user from session - handle potential errors more gracefully
+    const { data: sessionData } = await supabase.auth.getSession();
+    const user = sessionData?.session?.user;
+    
+    if (!user || !user.id) {
+      console.error('Cash Custody API: No authenticated user found');
+      throw new Error('User not authenticated');
+    }
+    
+    console.log('Cash Custody API: Giving custody for user ID:', user.id);
+    
+    // Get the wallet to verify it exists and has sufficient funds
+    const wallet = await getWalletById(walletId);
+    if (!wallet) throw new Error('Wallet not found');
+    
+    // Check if wallet has enough balance
+    const currentBalance = wallet.currencies?.[currencyCode] || 0;
+    if (currentBalance < Number(amount)) {
+      throw new Error(`Insufficient balance in wallet. Available: ${currentBalance} ${currencyCode}`);
+    }
+    
+    // Create unique ID for this custody record
+    const custodyId = generateUUID();
+    
+    // Initial status: If approval is required, set to 'pending', otherwise 'approved'
+    const initialStatus = requireApproval ? 'pending' : 'approved';
+    
+    // Prepare custody record object
+    const custodyRecord = {
+      id: custodyId,
+      treasurer_id: user.id,
+      cashier_id: cashierId,
+      wallet_id: walletId,
+      currency_code: currencyCode,
+      amount: Number(amount),
+      notes: notes || null,
+      is_returned: false,
+      status: initialStatus,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+    
+    // Log the custody record for debugging
+    console.log('Creating custody record:', JSON.stringify(custodyRecord));
+    
+    // Create custody record
+    const { data, error } = await supabase
+      .from('cash_custody')
+      .insert(custodyRecord)
+      .select('*')
+      .single();
+      
+    if (error) {
+      console.error('Error creating custody record:', error);
+      throw error;
+    }
+    
+    // If no approval required, update wallet balance immediately
+    if (!requireApproval) {
+      await updateWalletCurrencyBalance(
+        walletId,
+        currencyCode,
+        currentBalance - Number(amount)
+      );
+    }
+    
+    // Get cashier details to use in notification
+    const { data: cashier } = await supabase
+      .from('users')
+      .select('name, email')
+      .eq('id', cashierId)
+      .single();
+    
+    // Create notification for the cashier
+    try {
+      const { createNotification } = await import('../tables/notifications');
+      
+      // Log the custodyId for debugging
+      console.log('Creating notification with custodyId:', custodyId, typeof custodyId);
+      
+      // Explicitly convert to string if not already
+      const safeReferenceId = typeof custodyId === 'string' ? custodyId : String(custodyId);
+      
+      // Create notification payload with additional info embedded in message
+      const notificationPayload = {
+        userId: cashierId,
+        title: requireApproval ? 'New Custody Request' : 'Custody Assigned to You',
+        message: requireApproval 
+          ? `You have a custody request for ${amount} ${currencyCode} from wallet ${walletId}. Please review and respond.`
+          : `You have been assigned ${amount} ${currencyCode} in custody from wallet ${walletId}.`,
+        type: 'custody_request',
+        referenceId: safeReferenceId,
+        requiresAction: requireApproval,
+        // Properly format action_payload as a JSON object with primitive values only
+        actionPayload: JSON.stringify({
+          amount: Number(amount),
+          currencyCode: String(currencyCode),
+          walletId: String(walletId),
+          type: 'give_custody'
+        })
+      };
+      
+      // Simple debugging logs
+      console.log('Notification payload:', notificationPayload);
+      
+      await createNotification(notificationPayload);
+    } catch (notificationError) {
+      console.error('Cash Custody API: Error creating notification:', notificationError);
+      // Continue with the flow even if notification fails
+    }
+    
+    console.log('Cash Custody API: Successfully gave custody:', data);
+    return data;
+  } catch (error) {
+    console.error('Cash Custody API: Error in giveCashCustody:', error);
+    throw handleApiError(error, 'Give Cash Custody');
+  }
+}
+
+/**
+ * Get back cash custody from a cashier
+ * 
+ * @param {Object} custodyData - Cash custody data
+ * @param {string} custodyData.custodyId - ID of the custody record to mark as returned
+ * @param {string} custodyData.cashierId - ID of the cashier returning custody
+ * @param {string} custodyData.walletId - ID of the wallet to use
+ * @param {string} custodyData.currencyCode - Currency code
+ * @param {number} custodyData.amount - Amount to get back
+ * @param {string} custodyData.notes - Optional notes
+ * @param {boolean} custodyData.requireApproval - Whether this return requires approval
+ * @returns {Promise<Object>} - Updated cash custody record
+ */
+export async function getCashCustody({
+  custodyId,
+  cashierId,
+  walletId,
+  currencyCode,
+  amount,
+  notes,
+  requireApproval = false // By default, returns don't need approval
+}) {
+  try {
+    // Validate input
+    if (!cashierId) throw new Error('Cashier is required');
+    if (!walletId) throw new Error('Wallet is required');
+    if (!currencyCode) throw new Error('Currency is required');
+    if (!amount || isNaN(Number(amount)) || Number(amount) <= 0) {
+      throw new Error('Valid amount is required');
+    }
+    
+    // Get user from session - handle potential errors more gracefully
+    const { data: sessionData } = await supabase.auth.getSession();
+    const user = sessionData?.session?.user;
+    
+    if (!user || !user.id) {
+      console.error('Cash Custody API: No authenticated user found');
+      throw new Error('User not authenticated');
+    }
+    
+    console.log('Cash Custody API: Getting custody for user ID:', user.id);
+    
+    // Get the wallet to verify it exists
+    const wallet = await getWalletById(walletId);
+    if (!wallet) throw new Error('Wallet not found');
+    
+    // Initial status: If approval is required, set to 'pending', otherwise 'approved'
+    const initialStatus = requireApproval ? 'pending' : 'approved';
+    
+    // Create record of custody return
+    const { data, error } = await supabase
+      .from('cash_custody')
+      .insert({
+        id: generateUUID(),
+        treasurer_id: user.id,
+        cashier_id: cashierId,
+        wallet_id: walletId,
+        currency_code: currencyCode,
+        amount: Number(amount),
+        notes: notes || null,
+        is_returned: true,  // Mark as returned
+        status: initialStatus,
+        reference_custody_id: custodyId || null, // Reference to the original custody if available
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .select('*')
+      .single();
+      
+    if (error) throw error;
+    
+    // If no approval required, update wallet balance immediately
+    if (!requireApproval) {
+      // Update wallet balance - add the money back to the wallet
+      const currentBalance = wallet.currencies?.[currencyCode] || 0;
+      await updateWalletCurrencyBalance(
+        walletId,
+        currencyCode,
+        currentBalance + Number(amount)
+      );
+    }
+    
+    // Create notification for the treasurer or cashier
+    try {
+      const { createNotification } = await import('../tables/notifications');
+      
+      // Log the data.id for debugging
+      console.log('Creating notification with data.id:', data.id, typeof data.id);
+      
+      // Explicitly convert to string if not already
+      const safeReferenceId = typeof data.id === 'string' ? data.id : String(data.id);
+      
+      if (requireApproval) {
+        // If approval is required, notify the treasurer
+        // Create notification with all details in the message
+        const treasurerPayload = {
+          userId: user.id, // Notify the treasurer
+          title: 'Custody Return Request',
+          message: `A cashier has requested to return ${amount} ${currencyCode} in custody from wallet ${walletId}. Please review.`,
+          type: 'custody_return',
+          referenceId: safeReferenceId,
+          requiresAction: true
+          // Removed action_payload to avoid database errors
+        };
+        
+        // Log the payload
+        console.log('Treasurer notification payload:', treasurerPayload);
+        
+        await createNotification(treasurerPayload);
+      } else {
+        // If no approval needed, just notify the cashier that their return was processed
+        // Create notification with all details in the message
+        const cashierPayload = {
+          userId: cashierId,
+          title: 'Custody Return Processed',
+          message: `Your return of ${amount} ${currencyCode} from wallet ${walletId} has been processed.`,
+          type: 'custody_return',
+          referenceId: safeReferenceId,
+          requiresAction: false
+          // Removed action_payload to avoid database errors
+        };
+        
+        // Log the payload
+        console.log('Cashier notification payload:', cashierPayload);
+        
+        await createNotification(cashierPayload);
+      }
+    } catch (notificationError) {
+      console.error('Cash Custody API: Error creating notification:', notificationError);
+      // Continue with the flow even if notification fails
+    }
+    
+    console.log('Cash Custody API: Successfully got custody back:', data);
+    return data;
+  } catch (error) {
+    console.error('Cash Custody API: Error in getCashCustody:', error);
+    throw handleApiError(error, 'Get Cash Custody');
+  }
+}
+
+/**
+ * Get cashiers (users with cashier role)
+ * 
+ * @returns {Promise<Array>} - List of cashiers
+ */
+export async function getCashiers() {
+  try {
+    console.log('Cash Custody API: Fetching cashiers...');
+    
+    // Get user ID from session
+    const { data: sessionData } = await supabase.auth.getSession();
+    const user = sessionData?.session?.user;
+    
+    if (!user || !user.id) {
+      console.error('Cash Custody API: No authenticated user found');
+      throw new Error('User not authenticated');
+    }
+    
+    // Get users with cashier role
+    const { data, error } = await supabase
+      .from('users')
+      .select('id, name, email')
+      .eq('role', 'cashier')
+      .order('name');
+      
+    if (error) throw error;
+    
+    // Include the current user if they're a manager (managers can also act as cashiers)
+    const { data: currentUser, error: currentUserError } = await supabase
+      .from('users')
+      .select('id, name, email, role')
+      .eq('id', user.id)
+      .single();
+      
+    if (currentUserError) throw currentUserError;
+    
+    if (currentUser && currentUser.role === 'manager') {
+      // Add the manager to the list if not already included
+      if (!data.some(cashier => cashier.id === currentUser.id)) {
+        data.push(currentUser);
+      }
+    }
+    
+    console.log(`Cash Custody API: Found ${data.length} cashiers`);
+    return data;
+  } catch (error) {
+    console.error('Cash Custody API: Error in getCashiers:', error);
+    throw handleApiError(error, 'Get Cashiers');
+  }
+}

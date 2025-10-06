@@ -1,4 +1,4 @@
-export default function Button({ children, variant = 'primary', className = '', ...props }) {
+export default function Button({ children, variant = 'primary', className = '', fullWidth, ...props }) {
   const base = 'inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed'
   const variants = {
     primary: 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-600',
@@ -6,8 +6,12 @@ export default function Button({ children, variant = 'primary', className = '', 
     success: 'bg-emerald-600 text-white hover:bg-emerald-700 focus:ring-emerald-600',
     outline: 'border border-gray-300 bg-white hover:bg-gray-50 text-gray-900 focus:ring-gray-300',
   }
+  
+  // Add width class if fullWidth is true
+  const widthClass = fullWidth ? 'w-full' : '';
+  
   return (
-    <button className={`${base} ${variants[variant]} ${className}`} {...props}>{children}</button>
+    <button className={`${base} ${variants[variant]} ${widthClass} ${className}`} {...props}>{children}</button>
   )
 }
 

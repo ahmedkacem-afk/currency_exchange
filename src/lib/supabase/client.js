@@ -30,6 +30,31 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey)
  * @param {String} context - Optional context for where the error occurred
  * @returns {Error} - A formatted error
  */
+/**
+ * Safely validate and sanitize a JSON object to ensure it can be properly sent to Supabase
+ * 
+ * @param {any} data - The data to sanitize
+ * @returns {Object|null} - Sanitized data or null if invalid
+ */
+export function sanitizeJsonData(data) {
+  if (data === null || data === undefined) return '{}';
+  
+  try {
+    // If it's already a string, assume it's properly formatted JSON
+    if (typeof data === 'string') {
+      // Validate that it's valid JSON by parsing it
+      JSON.parse(data);
+      return data;
+    }
+    
+    // Convert objects to JSON strings
+    return JSON.stringify(data);
+  } catch (err) {
+    console.error('Failed to sanitize JSON data:', err);
+    return '{}';
+  }
+}
+
 export function handleApiError(error, context = '') {
   const contextPrefix = context ? `[${context}] ` : ''
   
@@ -45,6 +70,11 @@ export function handleApiError(error, context = '') {
   
   if (error.code === '23503') {
     return new Error(`${contextPrefix}This operation references a record that doesn't exist`)
+  }
+  
+  // Handle JSON syntax errors
+  if (error.code === '22P02' && error.message?.includes('input syntax for type json')) {
+    return new Error(`${contextPrefix}Invalid JSON format in request`)
   }
   
   // Return the original error message or a generic one

@@ -6,7 +6,7 @@ import { supabase } from '../lib/supabase'
 
 export default function ProfilePage() {
   const { t } = useI18n()
-  const { user, profile, session } = useAuth()
+  const { user, userData, session } = useAuth()
   const { show } = useToast()
   
   const [loading, setLoading] = useState(false)
@@ -19,14 +19,14 @@ export default function ProfilePage() {
   const [errors, setErrors] = useState({})
   
   useEffect(() => {
-    if (profile) {
+    if (userData) {
       setFormData(prevData => ({
         ...prevData,
-        name: profile.name || '',
-        email: profile.email || user?.email || '',
+        name: userData.name || '',
+        email: userData.email || user?.email || '',
       }))
     }
-  }, [profile, user])
+  }, [userData, user])
   
   function handleChange(e) {
     const { name, value } = e.target

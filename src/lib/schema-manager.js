@@ -1,3 +1,50 @@
+
+/**
+ * First, run the following SQL in Supabase SQL Editor to create needed functions:
+ *
+ * -- Function to check if a table exists
+ * CREATE OR REPLACE FUNCTION public.check_table_exists(p_table_name text)
+ * RETURNS json
+ * LANGUAGE plpgsql
+ * SECURITY DEFINER
+ * AS $$
+ * DECLARE
+ *   result json;
+ * BEGIN
+ *   SELECT json_build_object('table_name', t.table_name)::json INTO result
+ *   FROM information_schema.tables t
+ *   WHERE t.table_schema = 'public' AND t.table_name = p_table_name;
+ *   
+ *   RETURN COALESCE(result, '{"table_name": null}'::json);
+ * END;
+ * $$;
+ * 
+ * -- Function to get table columns
+ * CREATE OR REPLACE FUNCTION public.get_table_columns(p_table_name text)
+ * RETURNS json
+ * LANGUAGE plpgsql
+ * SECURITY DEFINER
+ * AS $$
+ * DECLARE
+ *   result json;
+ * BEGIN
+ *   SELECT json_agg(
+ *     json_build_object(
+ *       'column_name', c.column_name,
+ *       'data_type', c.data_type
+ *     )
+ *   )::json INTO result
+ *   FROM information_schema.columns c
+ *   WHERE c.table_schema = 'public' AND c.table_name = p_table_name;
+ *   
+ *   RETURN COALESCE(result, '[]'::json);
+ * END;
+ * $$;
+ *
+ * -- Make functions accessible via RPC
+ * GRANT EXECUTE ON FUNCTION public.check_table_exists TO anon, authenticated;
+ * GRANT EXECUTE ON FUNCTION public.get_table_columns TO anon, authenticated;
+ */
 /**
  * Schema Manager
  * 
@@ -353,11 +400,9 @@ export async function validateAndUpdateSchema() {
       }
       
       // Get current columns
+      // Use RPC function instead of direct information_schema access
       const { data: columns, error } = await supabase
-        .from('information_schema.columns')
-        .select('column_name, data_type')
-        .eq('table_name', tableName)
-        .eq('table_schema', 'public')
+        .rpc('get_table_columns', { table_name: tableName })
       
       if (error) {
         console.error(`Error getting columns for table ${tableName}:`, error)

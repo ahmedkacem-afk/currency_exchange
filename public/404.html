@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Currency Exchange Manager</title>
+  <script>
+    // Single Page App handling for direct URL access
+    // Preserve the requested URL and redirect to the root
+    (function() {
+      // Save the path (everything after the domain)
+      var path = window.location.pathname + window.location.search + window.location.hash;
+      
+      // Redirect to the root while preserving the path using history state
+      if (path !== '/') {
+        window.sessionStorage.setItem('redirectPath', path);
+        window.location.href = '/';
+      }
+    })();
+  </script>
+</head>
+<body>
+  <p>Redirecting to application...</p>
+</body>
+</html>

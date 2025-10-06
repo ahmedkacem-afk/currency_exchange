@@ -25,6 +25,31 @@ import {
   deleteCurrencyType as deleteCurrencyTypeInSupabase
 } from './supabase/tables/currency_types'
 
+import {
+  getAllDebts as getAllDebtsFromSupabase,
+  getDebtSummary as getDebtSummaryFromSupabase,
+  createDebt as createDebtInSupabase,
+  markDebtAsPaid as markDebtAsPaidInSupabase,
+  deleteDebt as deleteDebtInSupabase
+} from './supabase/tables/debts'
+
+import {
+  getAllCashCustody as getAllCashCustodyFromSupabase,
+  giveCashCustody as giveCashCustodyInSupabase,
+  getCashCustody as getCashCustodyInSupabase,
+  getCashiers as getCashiersFromSupabase,
+  updateCustodyStatus as updateCustodyStatusInSupabase
+} from './supabase/tables/cash_custody'
+
+import {
+  getAllRoles as getAllRolesFromSupabase,
+  getRoleById as getRoleByIdFromSupabase,
+  getRoleByName as getRoleByNameFromSupabase,
+  assignRoleToUser as assignRoleToUserInSupabase,
+  getUserRole as getUserRoleFromSupabase,
+  hasAnyRole as hasAnyRoleFromSupabase
+} from './supabase/tables/roles'
+
 /**
  * Login with email and password
  * 
@@ -44,7 +69,25 @@ export async function login(email, password) {
  */
 export async function getSummary() {
   console.log('API: Getting summary from Supabase');
-  return await getWalletsSummary();
+  
+  // Get both wallet summary and debt summary in parallel
+  const [walletSummary, debtSummary] = await Promise.all([
+    getWalletsSummary(),
+    getDebtSummaryFromSupabase().catch(err => {
+      console.warn('Failed to get debt summary, continuing with wallet summary only:', err);
+      return null;
+    })
+  ]);
+  
+  // Combine the summaries if debt summary was retrieved
+  if (debtSummary) {
+    return {
+      ...walletSummary,
+      debtSummary
+    };
+  }
+  
+  return walletSummary;
 }
 
 /**
@@ -229,6 +272,59 @@ export async function updateCurrencyType(code, updates) {
 }
 
 /**
+ * Get all debts for the current user
+ * 
+ * @returns {Promise<Object>} Object with owed and receivable debts
+ */
+export async function getAllDebts() {
+  console.log('API: Getting all debts from Supabase');
+  return await getAllDebtsFromSupabase();
+}
+
+/**
+ * Get debt summary for the current user
+ * 
+ * @returns {Promise<Object>} Summary of debt amounts
+ */
+export async function getDebtSummary() {
+  console.log('API: Getting debt summary from Supabase');
+  return await getDebtSummaryFromSupabase();
+}
+
+/**
+ * Create a new debt record
+ * 
+ * @param {Object} debtData - Debt details
+ * @returns {Promise<Object>} The created debt
+ */
+export async function createDebt(debtData) {
+  console.log('API: Creating debt record in Supabase', { debtData });
+  return await createDebtInSupabase(debtData);
+}
+
+/**
+ * Mark a debt as paid
+ * 
+ * @param {string} debtId - ID of the debt
+ * @returns {Promise<Object>} The updated debt
+ */
+export async function markDebtAsPaid(debtId) {
+  console.log('API: Marking debt as paid in Supabase', { debtId });
+  return await markDebtAsPaidInSupabase(debtId);
+}
+
+/**
+ * Delete a debt record
+ * 
+ * @param {string} debtId - ID of the debt to delete
+ * @returns {Promise<void>}
+ */
+export async function deleteDebt(debtId) {
+  console.log('API: Deleting debt record from Supabase', { debtId });
+  return await deleteDebtInSupabase(debtId);
+}
+
+/**
  * Delete a currency type
  * 
  * @param {string} code - Currency code to delete
@@ -252,4 +348,124 @@ export async function addCurrencyToWallet(walletId, currencyCode, balance) {
   return await addCurrencyToWalletInSupabase(walletId, currencyCode, balance);
 }
 
+/**
+ * Get all cash custody records
+ * 
+ * @returns {Promise<Object>} - Cash custody records
+ */
+export async function getAllCashCustody() {
+  console.log('API: Getting all cash custody records from Supabase');
+  return await getAllCashCustodyFromSupabase();
+}
+
+/**
+ * Give cash custody to a cashier
+ * 
+ * @param {Object} custodyData - Custody details
+ * @returns {Promise<Object>} The created custody record
+ */
+export async function giveCashCustody(custodyData) {
+  console.log('API: Giving cash custody in Supabase', { custodyData });
+  return await giveCashCustodyInSupabase(custodyData);
+}
+
+/**
+ * Get cash custody back from a cashier
+ * 
+ * @param {Object} custodyData - Custody details
+ * @returns {Promise<Object>} The created custody record
+ */
+export async function getCashCustody(custodyData) {
+  console.log('API: Getting cash custody in Supabase', { custodyData });
+  return await getCashCustodyInSupabase(custodyData);
+}
+
+/**
+ * Get list of cashiers
+ * 
+ * @returns {Promise<Array>} List of cashiers
+ */
+export async function getCashiers() {
+  console.log('API: Getting cashiers from Supabase');
+  return await getCashiersFromSupabase();
+}
+
+/**
+ * Update cash custody status (approve or reject)
+ * 
+ * @param {string} custodyId - ID of the custody record to update
+ * @param {string} status - New status (approved, rejected, returned)
+ * @returns {Promise<Object>} - Updated custody record
+ */
+export async function updateCustodyStatus(custodyId, status) {
+  console.log('API: Updating custody status in Supabase', { custodyId, status });
+  return await updateCustodyStatusInSupabase(custodyId, status);
+}
+
+/**
+ * Get all available roles
+ * 
+ * @returns {Promise<Array>} - List of roles
+ */
+export async function getAllRoles() {
+  console.log('API: Getting all roles from Supabase');
+  return await getAllRolesFromSupabase();
+}
+
+/**
+ * Get role by ID
+ * 
+ * @param {string} roleId - Role ID
+ * @returns {Promise<Object>} - Role object
+ */
+export async function getRoleById(roleId) {
+  console.log('API: Getting role by ID from Supabase', { roleId });
+  return await getRoleByIdFromSupabase(roleId);
+}
+
+/**
+ * Get role by name
+ * 
+ * @param {string} roleName - Role name
+ * @returns {Promise<Object>} - Role object
+ */
+export async function getRoleByName(roleName) {
+  console.log('API: Getting role by name from Supabase', { roleName });
+  return await getRoleByNameFromSupabase(roleName);
+}
+
+/**
+ * Assign role to user
+ * 
+ * @param {string} userId - User ID
+ * @param {string} roleId - Role ID
+ * @returns {Promise<Object>} - Updated profile
+ */
+export async function assignRoleToUser(userId, roleId) {
+  console.log('API: Assigning role to user in Supabase', { userId, roleId });
+  return await assignRoleToUserInSupabase(userId, roleId);
+}
+
+/**
+ * Get user role
+ * 
+ * @param {string} userId - User ID (optional, defaults to current user)
+ * @returns {Promise<Object>} - User role
+ */
+export async function getUserRole(userId = null) {
+  console.log('API: Getting user role from Supabase', { userId });
+  return await getUserRoleFromSupabase(userId);
+}
+
+/**
+ * Check if user has any of the specified roles
+ * 
+ * @param {Array<string>} roles - Array of role names to check
+ * @param {string} userId - User ID (optional, defaults to current user)
+ * @returns {Promise<boolean>} - True if user has any of the roles
+ */
+export async function hasAnyRole(roles = [], userId = null) {
+  console.log('API: Checking if user has any role from Supabase', { roles, userId });
+  return await hasAnyRoleFromSupabase(roles, userId);
+}
 

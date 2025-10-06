@@ -11,6 +11,7 @@ export async function runMigrations() {
     // Run all migrations in sequence
     const results = await Promise.all([
       migrateManagerPricesFields(),
+      dropProfilesTable(),
       // Add future migrations here
     ]);
     
@@ -108,6 +109,63 @@ export async function migrateManagerPricesFields() {
     return { migrated: false, reason: 'unknown' };
   } catch (error) {
     console.error('Error during manager_prices migration:', error);
+    throw error;
+  }
+}
+
+/**
+ * Drops the profiles table after migrating to use the users table directly
+ */
+export async function dropProfilesTable() {
+  try {
+    console.log('Running drop profiles table migration...');
+    
+    // Check if the profiles table exists
+    const { error: profilesExistError } = await supabase
+      .from('profiles')
+      .select('id')
+      .limit(1);
+    
+    // If we get a "relation does not exist" error, the table is already gone
+    if (profilesExistError && profilesExistError.message.includes('does not exist')) {
+      console.log('Profiles table already dropped');
+      return { migrated: false, reason: 'already_migrated' };
+    }
+    
+    // Read the SQL file content
+    const response = await fetch('/migrations/drop_profiles_table.sql');
+    if (!response.ok) {
+      throw new Error(`Failed to load migration file: ${response.statusText}`);
+    }
+    
+    const migrationSql = await response.text();
+    
+    // Split the SQL into separate statements
+    const statements = migrationSql
+      .replace(/--.*$/gm, '') // Remove SQL comments
+      .split(';')
+      .map(statement => statement.trim())
+      .filter(statement => statement.length > 0);
+    
+    // Execute each statement
+    for (const statement of statements) {
+      try {
+        const { error } = await supabase.rpc('exec_sql', { sql: statement + ';' });
+        
+        if (error) {
+          console.error(`Error executing SQL: ${statement}`);
+          console.error(error);
+        }
+      } catch (stmtError) {
+        console.error(`Exception executing SQL: ${statement}`);
+        console.error(stmtError);
+      }
+    }
+    
+    console.log('Drop profiles table migration completed');
+    return { migrated: true };
+  } catch (error) {
+    console.error('Error during drop profiles table migration:', error);
     throw error;
   }
 }

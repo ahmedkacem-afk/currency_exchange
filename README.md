@@ -8,9 +8,11 @@ A multi-currency exchange management system built with React, Vite, and Supabase
 - **Wallet Management**: Create and manage wallets with multiple currencies
 - **Price Management**: Set buying and selling prices for currency exchange
 - **Withdrawals**: Process withdrawals from wallets with detailed tracking
-- **User Authentication**: Secure login system with role-based access
+- **Transaction Validation**: Dealings Executioners can validate transactions that require approval. See [TRANSACTION_VALIDATION.md](./TRANSACTION_VALIDATION.md) for details.
+- **Role-Based Access Control**: Secure authentication with four roles (Manager, Treasurer, Cashier, Dealings Executioner). See [USER_ROLES.md](./USER_ROLES.md) for details.
 - **Reports**: Generate reports on transactions and balances
 - **Responsive Design**: Works on desktop and mobile devices
+- **Automatic Session Refresh**: Prevents unauthorized errors during long sessions. See [SCHEMA_AUTH_FIXES.md](./SCHEMA_AUTH_FIXES.md) for details.
 
 ## New Multi-Currency Support
 
@@ -87,9 +89,20 @@ You can see the database schema and migration details in [DATABASE.md](./DATABAS
 
 ### Creating Entities
 
-1. Go to the Create Entities page
+1. Go to the Create Entities page (Manager role only)
 2. Fill in the form to create a new wallet, user, or operation
 3. Click "Create" to save
+
+### Role-Based Access Control
+
+The application uses a role-based access control system with four distinct roles:
+
+1. **Manager** - Has access to all features and can manage users
+2. **Treasurer** - Manages cash custody and treasury operations
+3. **Cashier** - Handles currency exchange transactions and cash custody
+4. **Dealings Executioner** - Executes currency dealings and operations
+
+For more details, see [USER_ROLES.md](./USER_ROLES.md).
 
 ## Contributing
 

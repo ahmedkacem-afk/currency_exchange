@@ -21,7 +21,7 @@ export async function getRecentTransactions({ limit = 30, offset = 0 } = {}) {
     const { data, error, count } = await supabase
       .from('transactions')
       .select('*', { count: 'exact' })
-      .order('created_at', { ascending: false })
+      .order('createdat', { ascending: false })
       .range(offset, offset + limit - 1)
       
     if (error) throw error
@@ -50,7 +50,7 @@ export async function getTransactionsByWallet(walletId, { limit = 30, offset = 0
       .from('transactions')
       .select('*', { count: 'exact' })
       .eq('walletid', walletId)
-      .order('created_at', { ascending: false })
+      .order('createdat', { ascending: false })
       .range(offset, offset + limit - 1)
       
     if (error) throw error
@@ -177,7 +177,7 @@ export async function getTransactionStats() {
     const { data: recentTx, error: txError } = await supabase
       .from('transactions')
       .select('type, dinarprice')
-      .order('created_at', { ascending: false })
+      .order('createdat', { ascending: false })
       .limit(30)
       
     if (txError) throw txError

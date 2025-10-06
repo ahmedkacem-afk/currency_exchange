@@ -7,6 +7,12 @@ const strings = {
       dashboard: 'Dashboard', 
       withdrawals: 'Withdrawals & Reports', 
       create: 'Create Entities',
+      cashier: 'Cashier Interface',
+      executioner: 'Dealership Executioner',
+      debtManagement: 'Debt Management',
+      treasurer: 'Treasury Management',
+      cashCustody: 'Cash Custody',
+      userManagement: 'User Management',
       changePassword: 'Change Password',
       logout: 'Sign Out',
       account: 'Account',
@@ -18,7 +24,8 @@ const strings = {
       selectWallet: 'Select Wallet', walletBalances: 'Wallet Balances', usd: 'USD', lyd: 'LYD',
       buyInfo: 'Buying Dinar', sellInfo: 'Selling Dinar', lowest: 'Lowest', median: 'Median', highest: 'Highest',
       managerPrices: 'Manager Prices', sellold: 'Selling old dinar', sellnew: 'Selling new dinar', buyold: 'Buying old dinar', buynew: 'Buying new dinar', save: 'Save Prices'
-    },    withdrawals: {
+    },    
+    withdrawals: {
       title: 'Withdrawals & Reports', chooseWallet: 'Choose Wallet', usd: 'USD to withdraw', lyd: 'LYD to withdraw', reason: 'Reason', confirm: 'Confirm Withdraw',
       reportType: 'Report Type', exportPdf: 'Export PDF', currency: 'Currency to withdraw', amount: 'Amount to withdraw'
     },
@@ -36,22 +43,218 @@ const strings = {
       updating: 'Updating...',
       submit: 'Update Password'
     },
-    common: {
-      cancel: 'Cancel'
-    },
     create: {
       title: 'Create Entities', wallet: 'Create Wallet', name: 'Name', initUsd: 'Initial USD', initLyd: 'Initial LYD', create: 'Create',
       user: 'Create User', email: 'Email', phone: 'Phone', password: 'Password',
       operation: 'Create Operation', operationName: 'Operation Name',
       currencyType: 'Create Currency Type', currencyCode: 'Currency Code', currencyName: 'Currency Name',
       currencySymbol: 'Currency Symbol (Optional)', addCurrency: 'Add Currency', initialBalance: 'Initial Balance'
+    },
+    common: {
+      cancel: 'Cancel',
+      back: 'Back',
+      close: 'Close',
+      save: 'Save',
+      saving: 'Saving...',
+      delete: 'Delete',
+      deleted: 'Successfully deleted',
+      paid: 'Mark as Paid',
+      loading: 'Loading...',
+      notes: 'Notes',
+      selectOption: 'Select an option',
+      failedToLoadData: 'Failed to load data',
+      failedToSave: 'Failed to save',
+      availableBalance: 'Available Balance',
+      fillRequiredFields: 'Please fill all required fields',
+      failed: 'Operation failed'
+    },
+    executioner: {
+      title: 'Dealership Executioner',
+      subtitle: 'Monitor and validate currency transactions',
+      currentRates: 'Current Exchange Rates',
+      transactions: 'Transaction Records',
+      pending: 'Pending Validation',
+      completed: 'Validated',
+      needsValidation: 'Needs Validation',
+      validate: 'Validate',
+      details: 'Details',
+      transactionType: 'Type',
+      cashierName: 'Cashier',
+      clientName: 'Client',
+      source: 'Source',
+      destination: 'Destination',
+      amount: 'Amount',
+      totalAmount: 'Total',
+      status: 'Status',
+      date: 'Date',
+      time: 'Time',
+      actions: 'Actions',
+      buy: 'Buy',
+      sell: 'Sell',
+      filter: 'Filter',
+      all: 'All',
+      validated: 'Validated',
+      notValidated: 'Not Validated',
+      validateTransaction: 'Validate Transaction',
+      validationConfirmation: 'Are you sure you want to validate this transaction?',
+      transactionValidated: 'Transaction successfully validated',
+      validatedBy: 'Validated by',
+      validatedAt: 'Validated at',
+      transactionDetails: 'Transaction Details',
+      exchangeRate: 'Exchange Rate',
+      wallet: 'Wallet',
+      searchTransactions: 'Search transactions',
+      noTransactions: 'No transactions found',
+      highValue: 'High Value',
+      needsAttention: 'Needs Attention'
+    },
+    debtManagement: {
+      title: 'Debt Management',
+      subtitle: 'Track debts owed to you and by you',
+      createNew: 'Create New Debt Record',
+      personName: 'Person Name',
+      enterName: 'Enter person name',
+      selectWallet: 'Select Wallet',
+      selectCurrency: 'Select Currency',
+      amount: 'Amount',
+      give: 'I Owe',
+      get: 'Owed to Me',
+      created: 'Debt record created successfully',
+      debtsOwed: 'Debts I Owe',
+      debtsOwedToMe: 'Debts Owed to Me',
+      totalOwed: 'Total I Owe',
+      totalOwedToMe: 'Total Owed to Me',
+      by: 'by',
+      to: 'to',
+      recordDebt: 'Record Debt',
+      noDebtsOwed: 'You don\'t owe any debts',
+      noDebtsOwedToMe: 'No debts are owed to you',
+      paid: 'Paid',
+      markAsPaid: 'Mark as Paid',
+      markedAsPaid: 'Debt marked as paid successfully',
+      selectWalletFirst: 'Select a wallet first',
+      afterGiving: 'Balance after giving',
+      afterReceiving: 'Balance after receiving',
+      noDebts: 'No debts',
+      dateCreated: 'Date Created',
+      noDepts: 'No debts found',
+      searchDebts: 'Search debts',
+      filterBy: 'Filter by',
+      all: 'All',
+      iOwe: 'I Owe',
+      owedToMe: 'Owed to Me',
+      settleDebt: 'Settle Debt',
+      settleConfirm: 'Mark this debt as settled?',
+      settled: 'Settled',
+      active: 'Active',
+      markAsSettled: 'Mark as Settled',
+      note: 'Note (Optional)',
+      addNote: 'Add a note'
+    },
+    treasurer: {
+      title: 'Cash Custody Management',
+      subtitle: 'Manage cash custody between treasurer and cashiers',
+      giveCustody: 'Give Custody to Cashier',
+      getCustody: 'Get Custody from Cashier',
+      selectCashier: 'Select Cashier',
+      cashierName: 'Cashier Name',
+      currencyType: 'Currency Type',
+      amount: 'Amount',
+      selectAction: 'Select Action',
+      actionRequired: 'Please select an action first',
+      cashierRequired: 'Please select a cashier',
+      currencyRequired: 'Please select a currency',
+      amountRequired: 'Please enter an amount',
+      amountInvalid: 'Please enter a valid amount',
+      confirmCustody: 'Confirm Custody Transfer',
+      successGive: 'Cash custody successfully given to cashier',
+      successGet: 'Cash custody successfully received from cashier',
+      notes: 'Notes (Optional)',
+      processingCustody: 'Processing custody transfer...',
+      insufficientFunds: 'Insufficient funds for this operation',
+      selectCurrency: 'Select Currency'
+    },
+    
+    cashier: {
+      title: 'Cashier Interface',
+      subtitle: 'Buy and sell currency, generate reports',
+      buyButton: 'Buy Currency',
+      sellButton: 'Sell Currency',
+      reportButton: 'Generate Report',
+      cashInCustody: 'Cash in Custody',
+      buyRates: 'Buy Rates',
+      sellRates: 'Sell Rates',
+      oldDinar: 'Old Dinar',
+      newDinar: 'New Dinar',
+      buyTitle: 'Buy Currency',
+      buySubtitle: 'Record purchase of currency from customers',
+      sellTitle: 'Sell Currency',
+      sellSubtitle: 'Record sales of currency to customers',
+      currentBuyRates: 'Current Buy Rates',
+      currentSellRates: 'Current Sell Rates',
+      buyPagePlaceholder: 'Buy Currency interface will be implemented here',
+      sellPagePlaceholder: 'Sell Currency interface will be implemented here',
+      comingSoon: 'Coming Soon',
+      
+      // Form fields
+      currencyType: 'Currency Type',
+      currencyCode: 'Currency',
+      selectCurrencyType: 'Select currency type',
+      amountToBuy: 'Amount to Buy',
+      amountToSell: 'Amount to Sell',
+      price: 'Price',
+      sourceWallet: 'Source',
+      destinationWallet: 'Destination',
+      personalCustody: 'Personal Custody',
+      clientDirectly: 'Client Directly',
+      selectWallet: 'Select wallet',
+      clientName: 'Client Name',
+      enterClientName: 'Enter client name',
+      receivedAmount: 'Received Amount',
+      totalAmount: 'Total Amount',
+      
+      // Actions
+      processing: 'Processing...',
+      completePurchase: 'Complete Purchase',
+      completeSale: 'Complete Sale',
+      
+      // Currency exchange
+      currencyToReceive: 'Currency to Receive from Customer',
+      currencyToPay: 'Currency to Pay to Customer',
+      currencyToSell: 'Currency to Sell to Customer',
+      exchangeRate: 'Exchange Rate',
+      exchangeDescription: 'Transaction Summary',
+      buying: 'Receiving',
+      paying: 'Paying with',
+      selling: 'Selling',
+      receiving: 'Receiving',
+      andPaying: 'and paying with',
+      andReceiving: 'and receiving',
+      fromCustomer: 'From customer',
+      toCustomer: 'To customer',
+      selectBothCurrencies: 'Please select both currencies',
+      oldDinarSelected: 'Old Libyan Dinar selected',
+      newDinarSelected: 'New Libyan Dinar selected',
+      
+      // Enhanced transaction details
+      transactionDetails: 'Transaction Details',
+      transactionSummary: 'Transaction Summary',
+      amountReceiving: 'Amount Receiving',
+      amountSelling: 'Amount Selling',
+      atRate: 'At Rate',
+      amountHelp: 'Enter the amount you are processing'
     }
-  },  ar: {
+  },  
+  ar: {
     appTitle: 'إدارة الصرافة',
     nav: { 
       dashboard: 'لوحة المدير', 
       withdrawals: 'المصروفات والتقارير', 
       create: 'إنشاء الكيانات',
+      cashier: 'واجهة الصراف',
+      executioner: 'منفذ الصفقات',
+      debtManagement: 'إدارة الديون',
+      treasurer: 'إدارة العهد النقدية',
       changePassword: 'تغيير كلمة المرور',
       logout: 'تسجيل الخروج',
       account: 'الحساب',
@@ -63,7 +266,8 @@ const strings = {
       selectWallet: 'اختر المحفظة', walletBalances: 'أرصدة المحفظة', usd: 'دولار', lyd: 'دينار',
       buyInfo: 'معلومات شراء الدينار', sellInfo: 'معلومات بيع الدينار', lowest: 'الأدنى', median: 'الوسطي', highest: 'الأعلى',
       managerPrices: 'أسعار المدير', sellold: 'بيع الدينار القديم', sellnew: 'بيع الدينار الجديد', buyold: 'شراء الدينار القديم', buynew: 'شراء الدينار الجديد', save: 'حفظ الأسعار'
-    },    withdrawals: {
+    },    
+    withdrawals: {
       title: 'المصروفات والتقارير', chooseWallet: 'اختر المحفظة', usd: 'الدولار المسحوب', lyd: 'الدينار المسحوب', reason: 'السبب', confirm: 'تأكيد السحب',
       reportType: 'نوع التقرير', exportPdf: 'تصدير PDF', currency: 'العملة المراد سحبها', amount: 'المبلغ المراد سحبه'
     },
@@ -81,15 +285,185 @@ const strings = {
       updating: 'جاري التحديث...',
       submit: 'تحديث كلمة المرور'
     },
-    common: {
-      cancel: 'إلغاء'
-    },
     create: {
       title: 'إنشاء الكيانات', wallet: 'إنشاء محفظة', name: 'الاسم', initUsd: 'الدولار الابتدائي', initLyd: 'الدينار الابتدائي', create: 'إنشاء',
       user: 'إنشاء مستخدم', email: 'البريد الإلكتروني', phone: 'الهاتف', password: 'كلمة المرور',
       operation: 'إنشاء نوع معاملات', operationName: 'اسم المعاملة',
       currencyType: 'إنشاء نوع عملة', currencyCode: 'رمز العملة', currencyName: 'اسم العملة',
       currencySymbol: 'رمز العملة (اختياري)', addCurrency: 'إضافة عملة', initialBalance: 'الرصيد الأولي'
+    },
+    common: {
+      cancel: 'إلغاء',
+      back: 'رجوع',
+      close: 'إغلاق'
+    },
+    executioner: {
+      title: 'منفذ الصفقات',
+      subtitle: 'مراقبة وتصديق معاملات العملات',
+      currentRates: 'أسعار الصرف الحالية',
+      transactions: 'سجلات المعاملات',
+      pending: 'بانتظار التصديق',
+      completed: 'مصدّق عليها',
+      needsValidation: 'تحتاج إلى تصديق',
+      validate: 'تصديق',
+      details: 'تفاصيل',
+      transactionType: 'النوع',
+      cashierName: 'الصراف',
+      clientName: 'العميل',
+      source: 'المصدر',
+      destination: 'الوجهة',
+      amount: 'الكمية',
+      totalAmount: 'المجموع',
+      status: 'الحالة',
+      date: 'التاريخ',
+      time: 'الوقت',
+      actions: 'الإجراءات',
+      buy: 'شراء',
+      sell: 'بيع',
+      filter: 'تصفية',
+      all: 'الكل',
+      validated: 'تم التصديق',
+      notValidated: 'غير مصدق',
+      validateTransaction: 'تصديق المعاملة',
+      validationConfirmation: 'هل أنت متأكد أنك تريد تصديق هذه المعاملة؟',
+      transactionValidated: 'تم تصديق المعاملة بنجاح',
+      validatedBy: 'تم التصديق بواسطة',
+      validatedAt: 'تم التصديق في',
+      transactionDetails: 'تفاصيل المعاملة',
+      exchangeRate: 'سعر الصرف',
+      wallet: 'المحفظة',
+      searchTransactions: 'البحث في المعاملات',
+      noTransactions: 'لم يتم العثور على معاملات',
+      highValue: 'قيمة مرتفعة',
+      needsAttention: 'يحتاج انتباه'
+    },
+    debtManagement: {
+      title: 'إدارة الديون',
+      subtitle: 'تتبع الديون المستحقة لك وعليك',
+      createNew: 'إنشاء سجل دين جديد',
+      personName: 'اسم الشخص',
+      enterName: 'أدخل اسم الشخص',
+      selectWallet: 'اختر المحفظة',
+      selectCurrency: 'اختر العملة',
+      amount: 'المبلغ',
+      give: 'إعطاء (أنا مدين)',
+      get: 'استلام (مدين لي)',
+      created: 'تم إنشاء سجل الدين بنجاح',
+      debtsOwed: 'الديون التي أدين بها',
+      debtsOwedToMe: 'الديون المستحقة لي',
+      totalOwed: 'إجمالي ما أدين به',
+      totalOwedToMe: 'إجمالي ما هو مدين لي',
+      by: 'من قبل',
+      to: 'إلى',
+      dateCreated: 'تاريخ الإنشاء',
+      noDepts: 'لم يتم العثور على ديون',
+      searchDebts: 'البحث في الديون',
+      filterBy: 'تصفية حسب',
+      all: 'الكل',
+      iOwe: 'أنا مدين',
+      owedToMe: 'مدين لي',
+      afterGiving: 'الرصيد بعد الإعطاء',
+      afterReceiving: 'الرصيد بعد الاستلام',
+      settleDebt: 'تسوية الدين',
+      settleConfirm: 'هل تريد تحديد هذا الدين كمسدد؟',
+      settled: 'تمت التسوية',
+      active: 'نشط',
+      markAsSettled: 'تحديد كمسدد',
+      note: 'ملاحظة (اختياري)',
+      addNote: 'إضافة ملاحظة'
+    },
+    treasurer: {
+      title: 'إدارة العهد النقدية',
+      subtitle: 'إدارة العهد النقدية بين أمين الصندوق والصرافين',
+      giveCustody: 'إعطاء عهدة للصراف',
+      getCustody: 'استلام عهدة من الصراف',
+      selectCashier: 'اختر الصراف',
+      cashierName: 'اسم الصراف',
+      currencyType: 'نوع العملة',
+      amount: 'المبلغ',
+      selectAction: 'اختر الإجراء',
+      actionRequired: 'الرجاء اختيار الإجراء أولاً',
+      cashierRequired: 'الرجاء اختيار صراف',
+      currencyRequired: 'الرجاء اختيار عملة',
+      amountRequired: 'الرجاء إدخال المبلغ',
+      amountInvalid: 'الرجاء إدخال مبلغ صحيح',
+      confirmCustody: 'تأكيد تحويل العهدة',
+      successGive: 'تم إعطاء العهدة النقدية للصراف بنجاح',
+      successGet: 'تم استلام العهدة النقدية من الصراف بنجاح',
+      notes: 'ملاحظات (اختياري)',
+      processingCustody: 'جارٍ معالجة تحويل العهدة...',
+      insufficientFunds: 'رصيد غير كافٍ لهذه العملية',
+      selectCurrency: 'اختر العملة'
+    },
+    
+    cashier: {
+      title: 'واجهة الصراف',
+      subtitle: 'شراء وبيع العملة، إنشاء التقارير',
+      buyButton: 'شراء العملة',
+      sellButton: 'بيع العملة',
+      reportButton: 'إنشاء تقرير',
+      cashInCustody: 'النقد في العهدة',
+      buyRates: 'أسعار الشراء',
+      sellRates: 'أسعار البيع',
+      oldDinar: 'الدينار القديم',
+      newDinar: 'الدينار الجديد',
+      buyTitle: 'شراء العملة',
+      buySubtitle: 'تسجيل شراء العملة من العملاء',
+      sellTitle: 'بيع العملة',
+      sellSubtitle: 'تسجيل بيع العملة للعملاء',
+      currentBuyRates: 'أسعار الشراء الحالية',
+      currentSellRates: 'أسعار البيع الحالية',
+      buyPagePlaceholder: 'واجهة شراء العملة ستكون هنا',
+      sellPagePlaceholder: 'واجهة بيع العملة ستكون هنا',
+      comingSoon: 'قريباً',
+      
+      // Form fields
+      currencyType: 'نوع العملة',
+      currencyCode: 'العملة',
+      selectCurrencyType: 'اختر نوع العملة',
+      amountToBuy: 'كمية الشراء',
+      amountToSell: 'كمية البيع',
+      price: 'السعر',
+      sourceWallet: 'المصدر',
+      destinationWallet: 'الوجهة',
+      personalCustody: 'العهدة الشخصية',
+      clientDirectly: 'العميل مباشرة',
+      selectWallet: 'اختر المحفظة',
+      clientName: 'اسم العميل',
+      enterClientName: 'أدخل اسم العميل',
+      receivedAmount: 'المبلغ المستلم',
+      totalAmount: 'المبلغ الإجمالي',
+      
+      // Actions
+      processing: 'جاري المعالجة...',
+      completePurchase: 'إتمام الشراء',
+      completeSale: 'إتمام البيع',
+      
+      // Currency exchange
+      currencyToReceive: 'العملة التي تستلم من العميل',
+      currencyToPay: 'العملة التي تدفع للعميل',
+      currencyToSell: 'العملة التي تبيع للعميل',
+      exchangeRate: 'سعر الصرف',
+      exchangeDescription: 'ملخص المعاملة',
+      buying: 'استلام',
+      paying: 'الدفع بواسطة',
+      selling: 'بيع',
+      receiving: 'استلام',
+      andPaying: 'ودفع',
+      andReceiving: 'واستلام',
+      fromCustomer: 'من العميل',
+      toCustomer: 'إلى العميل',
+      selectBothCurrencies: 'الرجاء اختيار العملتين',
+      oldDinarSelected: 'تم اختيار الدينار الليبي القديم',
+      newDinarSelected: 'تم اختيار الدينار الليبي الجديد',
+      
+      // Enhanced transaction details
+      transactionDetails: 'تفاصيل المعاملة',
+      transactionSummary: 'ملخص المعاملة',
+      amountReceiving: 'الكمية المستلمة',
+      amountSelling: 'الكمية المباعة',
+      atRate: 'بسعر',
+      amountHelp: 'أدخل الكمية التي تتم معالجتها'
     }
   }
 }
@@ -106,14 +480,20 @@ export function I18nProvider({ children }) {
     return next
   })
   const t = (key) => key.split('.').reduce((o, k) => (o ? o[k] : key), strings[lang])
-  const value = useMemo(() => ({ t, lang, dir, toggleLang }), [lang])
-  return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>
+  
+  const value = useMemo(() => ({ lang, setLang, toggleLang, dir, t }), [lang, dir])
+  
+  return (
+    <I18nContext.Provider value={value}>
+      {children}
+    </I18nContext.Provider>
+  )
 }
 
 export function useI18n() {
-  const ctx = useContext(I18nContext)
-  if (!ctx) throw new Error('useI18n must be used within I18nProvider')
-  return ctx
+  const context = useContext(I18nContext)
+  if (!context) {
+    throw new Error('useI18n must be used within an I18nProvider')
+  }
+  return context
 }
-
-
