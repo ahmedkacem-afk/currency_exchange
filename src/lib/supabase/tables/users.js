@@ -4,7 +4,7 @@
  * This module handles all database operations related to users
  */
 
-import supabase, { handleApiError } from './client'
+import supabase, { handleApiError } from '../client'
 
 /**
  * Gets a user profile by ID
