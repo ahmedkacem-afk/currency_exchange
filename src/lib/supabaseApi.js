@@ -10,18 +10,18 @@ export async function login(email, password) {
   const { data, error } = await supabase.auth.signInWithPassword({
     email,
     password
-  })
+  });
   
-  if (error) throw error
+  if (error) throw error;
   
-  // Get the user profile after authentication
+  // Get user profile from database
   const { data: profile, error: profileError } = await supabase
     .from('users')
-    .select('id, role, name, email')
-    .eq('email', email)
-    .single()
+    .select('id, name, email, role')
+    .eq('id', data.user.id)
+    .single();
     
-  if (profileError) throw profileError
+  if (profileError) throw profileError;
   
   return {
     token: data.session.access_token,
@@ -525,207 +525,138 @@ export async function createUser(payload) {
       throw new Error('A role must be selected when creating a user.');
     }
     
+    // For admin-created users who want to avoid session changes,
+    // we'll create just a database user with a custom UUID
+    console.log('Admin creating database-only user to avoid session changes');
+    
+    // Generate our own UUID for this user
+    const generatedUserId = generateUUID();
+    console.log('Generated user ID:', generatedUserId);
+    
+    // Since we're bypassing auth, no auth error check is needed
+    console.log('Proceeding with database-only user creation');
+    
     // Extract first and last name
     const firstName = name.split(' ')[0] || '';
     const lastName = name.split(' ').slice(1).join(' ') || '';
     
-    // Create user with Supabase Auth first - we only proceed if this succeeds
-    console.log('Creating user through Supabase Auth...');
+    // Create user directly in the database with our generated ID
+    console.log('Creating user record in database with ID:', generatedUserId);
     
-    let authResult;
-    let lastError = null;
-    let authUserId = null;
+    // Create user record with our generated UUID
+    const userData = {
+      id: generatedUserId,
+      email,
+      name,
+      phone,
+      role,
+      role_id: roleId,
+      first_name: firstName,
+      last_name: lastName,
+      is_email_verified: true,
+      auth_linked: false  // This user isn't linked to auth system
+    };
     
-    // Use Supabase SDK with minimal options
-    try {
-      console.log('Attempting auth signup with properly formatted options...');
-      
-      // Make the API call with Supabase SDK but control the payload
-      const authResponse = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            full_name: name || email // Ensure we have a value for name
-          }
+    // Insert the user record directly
+    const { data: userRecord, error: userError } = await supabase
+      .from('users')
+      .insert(userData)
+      .select('id, name, email, role')
+      .single();
+    
+    if (userError) {
+      console.error('Error creating/updating user record:', userError);
+      throw userError;
+    }
+    
+    console.log('User record created/updated successfully:', userRecord.id);
+    
+    // For treasurer role, create a treasury wallet
+    let hasCustody = false;
+    let custodyId = null;
+    let treasuryWallet = null;
+    
+    if (role === 'treasurer') {
+      try {
+        console.log('Creating treasury wallet for treasurer user...', name);
+        // Import the createTreasuryWallet function directly
+        const { createTreasuryWallet } = await import('./supabase/tables/wallet_custody_helpers');
+        
+        // Create treasury wallet with user's name
+        treasuryWallet = await createTreasuryWallet(generatedUserId, name);
+        
+        if (treasuryWallet) {
+          console.log('Treasury wallet created successfully:', treasuryWallet.id);
+          hasCustody = true;
         }
-      });
-      
-      // Store result for later use
-      authResult = authResponse;
-      
-      if (!authResponse.error && authResponse.data?.user?.id) {
-        authUserId = authResponse.data.user.id;
-        console.log('Auth signup successful with user ID:', authUserId);
-      } else {
-        lastError = authResponse.error || new Error('Auth signup failed');
-        console.warn('Auth signup failed:', lastError);
-        // Log the full response for debugging
-        console.warn('Full response:', authResponse);
+      } catch (treasuryError) {
+        console.error('Failed to create treasury wallet:', treasuryError);
+        // Non-critical error, continue with user creation
       }
-    } catch (authError) {
-      lastError = authError;
-      console.warn('Auth signup threw exception:', authError);
-    }
-    
-    // If auth failed, don't create a user
-    if (!authUserId) {
-      console.error('Supabase Auth signup failed');
-      throw new Error(
-        lastError?.message || 
-        'Authentication service error. Please try again later or contact support.'
-      );
-    }
-    
-    // If we get here, auth was successful
-    const userId = authUserId;
-    console.log('Proceeding with user creation using auth ID:', userId);
-    
-    // First check if user already exists in database (created by trigger)
-    console.log('Checking if user record already exists...');
-    
-    try {
-      const { data: existingUser, error: checkError } = await supabase
-        .from('users')
-        .select('id, name, email, phone, role, role_id, first_name, last_name, is_email_verified')
-        .eq('id', userId)
-        .single();
-      
-      if (checkError && checkError.code !== 'PGRST116') { // PGRST116 means not found which is expected
-        console.error('Error checking for existing user:', checkError);
-      }
-      
-      const userData = {
-        name,
-        email,
-        phone,
-        role,
-        role_id: roleId,
-        first_name: firstName,
-        last_name: lastName,
-        is_email_verified: true, // Auto-verify for development
-        auth_linked: true // This user definitely has auth linked
-      };
-      
-      let user;
-      
-      if (existingUser) {
-        // User already exists (likely created by trigger), update it
-        console.log('User record already exists, updating with complete information...');
-        const { data: updatedUser, error: updateError } = await supabase
-          .from('users')
-          .update(userData)
-          .eq('id', userId)
-          .select('id, name, email, phone, role, role_id, first_name, last_name, is_email_verified')
+    } else if (role === 'cashier' || role === 'manager') {
+      try {
+        console.log(`Setting up initial custody for ${role}...`);
+        
+        // First, get the default currency code (USD)
+        const { data: currencies, error: currencyError } = await supabase
+          .from('currency_types')
+          .select('code')
+          .eq('code', 'USD')
+          .single();
+          
+        if (currencyError) {
+          console.error('Failed to get default currency:', currencyError);
+          throw currencyError;
+        }
+        
+        const currencyCode = currencies ? currencies.code : 'USD';
+        
+        // Create a custody record for the cashier
+        const { data: custody, error: custodyError } = await supabase
+          .from('custody')
+          .insert({
+            user_id: generatedUserId,
+            currency_code: currencyCode,
+            amount: 0
+            // updated_at will be set automatically by default
+          })
+          .select('id')
           .single();
         
+        if (custodyError) {
+          console.error('Failed to create custody record:', custodyError);
+          throw custodyError;
+        }
+        
+        custodyId = custody.id;
+        hasCustody = true;
+        
+        // Update the user record with the custody ID
+        const { error: updateError } = await supabase
+          .from('users')
+          .update({ 
+            has_custody: true, 
+            custody_id: custodyId 
+          })
+          .eq('id', generatedUserId);
+          
         if (updateError) {
-          console.error('Failed to update user record:', updateError);
+          console.error('Failed to update user with custody ID:', updateError);
           throw updateError;
         }
         
-        user = updatedUser;
-        console.log('User record updated successfully');
-      } else {
-        // User doesn't exist yet, create it
-        console.log('Creating new user record in database...');
-        
-        const fullUserData = {
-          id: userId, // This is the auth user ID
-          ...userData
-        };
-        
-        const { data: newUser, error: insertError } = await supabase
-          .from('users')
-          .insert(fullUserData)
-          .select('id, name, email, phone, role, role_id, first_name, last_name, is_email_verified')
-          .single();
-        
-        if (insertError) {
-          // If it's a duplicate key, the trigger probably created the user in the meantime
-          if (insertError.code === '23505') {
-            console.log('User was created by trigger while we were processing, trying update instead');
-            
-            // Try updating instead
-            const { data: updatedUser, error: updateError } = await supabase
-              .from('users')
-              .update(userData)
-              .eq('id', userId)
-              .select('id, name, email, phone, role, role_id, first_name, last_name, is_email_verified')
-              .single();
-              
-            if (updateError) {
-              console.error('Failed to update user after duplicate key error:', updateError);
-              throw updateError;
-            }
-            
-            user = updatedUser;
-            console.log('User record updated successfully after duplicate key detection');
-          } else {
-            console.error('Failed to create user record:', insertError);
-            // Log the full error details
-            try {
-              console.error('Full error details:', JSON.stringify(insertError, null, 2));
-            } catch (e) {
-              console.error('Could not stringify error');
-            }
-            throw insertError;
-          }
-        } else {
-          user = newUser;
-          console.log('New user record created successfully');
-        }
-      }
-    } catch (error) {
-      console.error('Error during user database operation:', error);
-      throw error;
-    }
-    
-    console.log('User record created successfully');
-    
-    // For cashier or manager roles, set up custody
-    let hasCustody = false;
-    let custodyId = null;
-    
-    if (role === 'cashier' || role === 'manager' || role === 'treasurer') {
-      try {
-        console.log(`Setting up initial custody for ${role}...`);
-        // Here you would add code to create the custody record
-        // For example, creating a wallet or assigning treasury access
-        
-        // Placeholder for actual custody creation
-        // const { data: custody } = await supabase
-        //   .from('custody')
-        //   .insert({
-        //     user_id: authData.user.id,
-        //     role: role,
-        //     initial_balance: 0
-        //   })
-        //   .select('id')
-        //   .single();
-        // 
-        // custodyId = custody.id;
-        // hasCustody = true;
-        
-        // Update user with custody information
-        // await supabase
-        //   .from('users')
-        //   .update({ 
-        //     has_custody: true, 
-        //     custody_id: custodyId 
-        //   })
-        //   .eq('id', authData.user.id);
-        
-        console.log('Custody setup completed');
+        console.log('Custody setup completed successfully with ID:', custodyId);
       } catch (custodyError) {
         console.error('Failed to set up custody, but user was created:', custodyError);
-        // Non-critical error, continue
+        // Non-critical error, continue with user creation
       }
     }
     
-    // Return the created user - at this point auth always succeeded
+    console.log('User created successfully, manager should remain logged in.');
+    
+    // Format and return the user data
     const formattedUser = {
-      id: userId,
+      id: generatedUserId,
       name,
       email,
       phone,
@@ -734,21 +665,23 @@ export async function createUser(payload) {
       lastName,
       hasCustody,
       custodyId,
-      // Always set to false since we're auto-verifying for development
+      treasuryWallet: treasuryWallet ? {
+        id: treasuryWallet.id,
+        name: treasuryWallet.name
+      } : null,
       needsEmailVerification: false,
-      authLinked: true
+      authLinked: false
     };
     
-    // Return success message
     return {
       user: formattedUser,
       message: 'User created successfully.'
     };
+    
   } catch (error) {
     console.error('Error creating user:', error);
     
     try {
-      // Try to log detailed error info
       console.error('Error details:', JSON.stringify(error, null, 2));
     } catch (e) {
       console.error('Could not stringify error:', e);
@@ -758,14 +691,7 @@ export async function createUser(payload) {
     if (error.message?.includes('already registered') || 
         error.message?.includes('already in use') ||
         (error.code === '23505')) {
-      // Check if it's specifically the users_pkey constraint
-      if (error.details?.includes('users_pkey')) {
-        // This likely means the trigger already created the user
-        console.log('User record exists but operation failed - likely a trigger/timing issue');
-        throw new Error('User creation failed due to a database conflict. Please try again.');
-      } else {
-        throw new Error('This email is already registered');
-      }
+      throw new Error('This email is already registered');
     }
     
     if (error.message?.includes('network') || 

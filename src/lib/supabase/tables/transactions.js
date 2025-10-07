@@ -14,13 +14,25 @@ import { getWalletById, updateWallet, updateWalletCurrency } from './wallets'
  * @param {Object} options - Query options
  * @param {number} options.limit - Max number of results
  * @param {number} options.offset - Pagination offset
+ * @param {boolean} options.onlyNeedsValidation - If true, only returns transactions that need validation
  * @returns {Promise<Object>} - Transaction results
  */
-export async function getRecentTransactions({ limit = 30, offset = 0 } = {}) {
+export async function getRecentTransactions({ limit = 30, offset = 0, onlyNeedsValidation = false } = {}) {
   try {
-    const { data, error, count } = await supabase
+    // Start building the query
+    let query = supabase
       .from('transactions')
       .select('*', { count: 'exact' })
+      
+    // Add filter if only transactions needing validation are requested
+    if (onlyNeedsValidation) {
+      query = query
+        .eq('needs_validation', true)
+        .eq('is_validated', false)
+    }
+    
+    // Complete the query with ordering and pagination
+    const { data, error, count } = await query
       .order('createdat', { ascending: false })
       .range(offset, offset + limit - 1)
       

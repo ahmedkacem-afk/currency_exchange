@@ -62,11 +62,47 @@ async function runMultiCurrencyMigration() {
     // Execute each statement
     for (const statement of statements) {
       try {
-        const { error } = await supabase.rpc('exec_sql', { sql: statement + ';' });
-        
-        if (error) {
-          console.error(`Error executing SQL: ${statement}`);
-          console.error(error);
+        // First try using RPC
+        try {
+          const { error } = await supabase.rpc('exec_sql', { sql: statement + ';' });
+          
+          if (error) {
+            console.warn(`RPC exec_sql failed: ${error.message}`);
+            
+            // Check if this is a "function not found" error
+            if (error.message.includes('Could not find the function') || 
+                error.code === 'PGRST202') {
+              console.warn('exec_sql function not available. Will try creating tables directly via API if possible');
+              
+              // For migrations we need another approach since we can't use RPC
+              if (statement.trim().toLowerCase().startsWith('create table')) {
+                console.log('Detected CREATE TABLE statement, but cannot execute directly.');
+                console.log('Please run the SQL in Supabase SQL Editor manually:');
+                console.log(statement);
+              } else if (statement.trim().toLowerCase().startsWith('insert into')) {
+                // Try to extract the table name and values
+                const tableMatch = statement.match(/insert\s+into\s+([^\s(]+)/i);
+                if (tableMatch && tableMatch[1]) {
+                  const tableName = tableMatch[1].replace(/public\./i, '');
+                  console.log(`Attempting to insert directly into ${tableName}`);
+                  
+                  // Very simplified, won't work for complex inserts
+                  try {
+                    await supabase.from(tableName).insert({});
+                  } catch (insertError) {
+                    console.error('Direct insert failed:', insertError);
+                  }
+                }
+              }
+              
+              break; // Exit the loop since we can't execute SQL
+            } else {
+              console.error(`Error executing SQL: ${statement}`);
+              console.error(error);
+            }
+          }
+        } catch (rpcError) {
+          console.warn(`RPC exec_sql exception: ${rpcError.message}`);
         }
       } catch (stmtError) {
         console.error(`Exception executing SQL: ${statement}`);

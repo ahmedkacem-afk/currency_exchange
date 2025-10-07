@@ -38,6 +38,7 @@ import {
   giveCashCustody as giveCashCustodyInSupabase,
   getCashCustody as getCashCustodyInSupabase,
   getCashiers as getCashiersFromSupabase,
+  getTreasurers as getTreasurersFromSupabase,
   updateCustodyStatus as updateCustodyStatusInSupabase
 } from './supabase/tables/cash_custody'
 
@@ -388,6 +389,16 @@ export async function getCashCustody(custodyData) {
 export async function getCashiers() {
   console.log('API: Getting cashiers from Supabase');
   return await getCashiersFromSupabase();
+}
+
+/**
+ * Get list of treasurers
+ * 
+ * @returns {Promise<Array>} List of treasurers
+ */
+export async function getTreasurers() {
+  console.log('API: Getting treasurers from Supabase');
+  return await getTreasurersFromSupabase();
 }
 
 /**

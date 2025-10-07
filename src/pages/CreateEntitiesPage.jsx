@@ -8,6 +8,7 @@ import Input from '../components/Input.jsx'
 import RoleSelector from '../components/RoleSelector.jsx'
 import { useToast } from '../components/Toast.jsx'
 import { useAuth } from '../lib/AuthContext.jsx'
+import { supabase } from '../lib/supabase'
 import AddCurrencyTypeModal from '../components/AddCurrencyTypeModal.jsx'
 import CurrencySelect from '../components/CurrencySelect.jsx'
 
@@ -109,22 +110,31 @@ export default function CreateEntitiesPage() {
       // Create user with auth integration - this will:
       // 1. Create the user in Supabase Auth with a UUID
       // 2. Create a profile in the users table with the same UUID
+      // Create user without disrupting current admin session - this approach
+      // now only creates a database record without touching auth
       const { user, message } = await createUser({ 
         name: uName, 
         email: uEmail, 
         phone: uPhone, 
         password: uPass,
         role: uRole // Selected role
-      })
+      });
       
       // Success - the auth ID is automatically used as the user ID in the users table
       setMsg(`User "${user.name}" created successfully with ID: ${user.id}`)
       
-      // Check if email verification is needed
-      if (user.needsEmailVerification) {
-        show(`User "${user.name}" created successfully. Email verification is required before login.`, 'info')
-      } else {
-        show(`User "${user.name}" created successfully`, 'success')
+      // Show specific message for treasurer role if a treasury wallet was created
+      if (user.role === 'treasurer' && user.treasuryWallet) {
+        const walletName = user.treasuryWallet.name;
+        show(`User "${user.name}" created successfully as a treasurer with treasury wallet "${walletName}".`, 'success')
+      }
+      // For other roles, show standard message
+      else if (user.role === 'treasurer') {
+        // Treasury role but no wallet created (error case)
+        show(`User "${user.name}" created successfully as a treasurer, but there was an issue creating the treasury wallet. Please check the console for errors.`, 'warning')
+      }
+      else {
+        show(`User "${user.name}" created successfully with role "${user.role}".`, 'success')
       }
       
       // Reset form

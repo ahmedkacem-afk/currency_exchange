@@ -127,27 +127,39 @@ export async function getCashiers() {
   try {
     console.log('Cash Custody API: Fetching cashiers...');
     
-    // In a real application, you would filter users by role
-    // For now, just return a hardcoded cashier for testing
-    // Once you have profiles table set up, you can use:
-    // .select('id, first_name, last_name, email')
-    // .eq('role', 'cashier')
+    // Get all users with the cashier role from the users table
+    const { data, error } = await supabase
+      .from('users')
+      .select('id, name, email, role, role_id')
+      .order('name');
     
-    const { data: sessionData } = await supabase.auth.getSession();
-    const currentUser = sessionData?.session?.user;
-    
-    if (!currentUser) {
-      console.error('Cash Custody API: No authenticated user');
-      throw new Error('User not authenticated');
+    if (error) {
+      console.error('Cash Custody API: Error fetching users:', error);
+      throw error;
     }
     
-    // For testing, just return a single cashier (current user)
-    // In production, you should query the profiles table
-    const cashiers = [{
-      id: currentUser.id,
-      email: currentUser.email,
-      name: `User ${currentUser.id.substring(0, 6)}`
-    }];
+    // Filter users who have the cashier role
+    // First, try to get cashier role ID if available
+    let cashierRoleId = null;
+    try {
+      const { data: roleData, error: roleError } = await supabase
+        .from('roles')
+        .select('id')
+        .eq('name', 'cashier')
+        .single();
+        
+      if (!roleError && roleData) {
+        cashierRoleId = roleData.id;
+      }
+    } catch (e) {
+      console.warn('Cash Custody API: Could not get cashier role ID:', e);
+    }
+    
+    // Filter users with cashier role (check both direct role and role_id)
+    const cashiers = data.filter(user => 
+      (user.role && user.role.toLowerCase() === 'cashier') || 
+      (cashierRoleId && user.role_id === cashierRoleId)
+    );
     
     console.log(`Cash Custody API: Found ${cashiers.length} cashiers`);
     return cashiers;
@@ -163,6 +175,57 @@ export async function getCashiers() {
  * @param {Object} data - Custody data
  * @returns {Promise<Object>} - Created custody record
  */
+/**
+ * Get treasurers list
+ * 
+ * @returns {Promise<Array>} - List of treasurers
+ */
+export async function getTreasurers() {
+  try {
+    console.log('Cash Custody API: Fetching treasurers...');
+    
+    // Get all users with the treasurer role from the users table
+    const { data, error } = await supabase
+      .from('users')
+      .select('id, name, email, role, role_id')
+      .order('name');
+    
+    if (error) {
+      console.error('Cash Custody API: Error fetching users:', error);
+      throw error;
+    }
+    
+    // Filter users who have the treasurer role
+    // First, try to get treasurer role ID if available
+    let treasurerRoleId = null;
+    try {
+      const { data: roleData, error: roleError } = await supabase
+        .from('roles')
+        .select('id')
+        .eq('name', 'treasurer')
+        .single();
+        
+      if (!roleError && roleData) {
+        treasurerRoleId = roleData.id;
+      }
+    } catch (e) {
+      console.warn('Cash Custody API: Could not get treasurer role ID:', e);
+    }
+    
+    // Filter users with treasurer role (check both direct role and role_id)
+    const treasurers = data.filter(user => 
+      (user.role && user.role.toLowerCase() === 'treasurer') || 
+      (treasurerRoleId && user.role_id === treasurerRoleId)
+    );
+    
+    console.log(`Cash Custody API: Found ${treasurers.length} treasurers`);
+    return treasurers;
+  } catch (error) {
+    console.error('Cash Custody API: Error in getTreasurers:', error);
+    throw handleApiError(error, 'Get Treasurers');
+  }
+}
+
 export async function giveCashCustody(data) {
   try {
     console.log('Cash Custody API: Giving custody with data:', data);
@@ -236,8 +299,53 @@ export async function giveCashCustody(data) {
       .single();
       
     if (insertError) {
-      console.error('Cash Custody API: Error inserting custody record:', insertError);
+      console.error('Cash Custody API: Error inserting cash_custody record:', insertError);
       throw insertError;
+    }
+    
+    // Check if the cashier already has a custody record for this currency
+    const { data: existingCustody, error: custodyCheckError } = await supabase
+      .from('custody')
+      .select('id, amount')
+      .eq('user_id', cashierId)
+      .eq('currency_code', currencyCode)
+      .maybeSingle();
+    
+    if (custodyCheckError) {
+      console.error('Cash Custody API: Error checking existing custody:', custodyCheckError);
+      // Continue since this is not critical to the main flow
+    }
+    
+    if (existingCustody) {
+      // Update existing custody record
+      console.log('Cash Custody API: Updating existing custody record for cashier');
+      const newAmount = Number(existingCustody.amount) + Number(amount);
+      
+      const { error: updateError } = await supabase
+        .from('custody')
+        .update({ amount: newAmount, updated_at: new Date().toISOString() })
+        .eq('id', existingCustody.id);
+      
+      if (updateError) {
+        console.error('Cash Custody API: Error updating cashier custody record:', updateError);
+        // Continue since the cash_custody record was created successfully
+      }
+    } else {
+      // Create a new custody record for the cashier
+      console.log('Cash Custody API: Creating new custody record for cashier');
+      
+      const { error: createCustodyError } = await supabase
+        .from('custody')
+        .insert({
+          user_id: cashierId,
+          currency_code: currencyCode,
+          amount: Number(amount)
+        });
+      
+      if (createCustodyError) {
+        console.error('Cash Custody API: Error creating cashier custody record:', createCustodyError);
+        // Continue since the cash_custody record was created successfully
+      }
     }
     
     // Note: In a real application, you might want to:

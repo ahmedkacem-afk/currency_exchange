@@ -7,6 +7,7 @@ import Button from '../components/Button.jsx'
 import Input from '../components/Input.jsx'
 import CurrencySelect from '../components/CurrencySelect.jsx'
 import { useToast } from '../components/Toast.jsx'
+import { getUserCustodyRecords, getFormattedCustodyOptions, getCombinedWalletAndCustodyOptions } from '../lib/supabase/tables/custody.js'
 
 /**
  * Sell Currency Page - Interface for selling currency to customers
@@ -16,6 +17,7 @@ export default function SellCurrencyPage() {
   const { t } = useI18n()
   const [prices, setPrices] = useState(null)
   const [wallets, setWallets] = useState([])
+  const [custodyRecords, setCustodyRecords] = useState([])
   const [currencyTypes, setCurrencyTypes] = useState([])
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
@@ -42,16 +44,23 @@ export default function SellCurrencyPage() {
     async function loadData() {
       try {
         setLoading(true)
+        console.log('SellCurrencyPage: Starting data fetch')
         
-        // Load prices, wallets and currency types in parallel
-        const [priceData, walletsData, currencyTypesData] = await Promise.all([
+        // Load prices, wallets, custody records, and currency types in parallel
+        const [priceData, walletsData, custodyData, currencyTypesData] = await Promise.all([
           getPrices(),
           getWallets(),
+          getUserCustodyRecords(),
           getAllCurrencyTypes()
         ])
         
+        console.log('SellCurrencyPage: Custody Records Received:', custodyData)
+        console.log('SellCurrencyPage: Wallets Received:', walletsData)
+        
         setPrices(priceData)
-        setWallets(walletsData?.wallets || [])
+        setWallets(walletsData?.wallets?.filter(wallet => !wallet.is_treasury) || [])
+        console.log('SellCurrencyPage: Setting custody records:', custodyData)
+        setCustodyRecords(custodyData?.data || custodyData || [])
         setCurrencyTypes(currencyTypesData || [])
         
         // Set default price if available
@@ -96,8 +105,19 @@ export default function SellCurrencyPage() {
         ...prev,
         price: updatedPrice
       }))
+      
+      // Reset source wallet if the currency changed and previous wallet doesn't support the new currency
+      if (formData.sourceWallet.startsWith('custody:')) {
+        const custodyId = formData.sourceWallet.split(':')[1];
+        const selectedCustody = custodyRecords.find(c => c.id === custodyId);
+        
+        if (selectedCustody && selectedCustody.currencyCode !== formData.sellCurrencyCode) {
+          // Reset to empty if the currencies don't match
+          setFormData(prev => ({ ...prev, sourceWallet: '' }))
+        }
+      }
     }
-  }, [formData.sellCurrencyCode, formData.receiveCurrencyCode, prices])
+  }, [formData.sellCurrencyCode, formData.receiveCurrencyCode, prices, custodyRecords])
   
   const handleInputChange = (e) => {
     const { name, value } = e.target
@@ -304,11 +324,32 @@ export default function SellCurrencyPage() {
                     required
                   >
                     <option value="">{t('cashier.selectWallet')}</option>
-                    <option value="custody">{t('cashier.personalCustody')}</option>
                     <option value="client">{t('cashier.clientDirectly')}</option>
-                    {wallets.map(wallet => (
-                      <option key={wallet.id} value={wallet.id}>{wallet.name}</option>
-                    ))}
+                    
+                    {/* Custody Records Group - Show all custodies */}
+                    {(() => {
+                      console.log('SellCurrencyPage: Rendering custody records in source dropdown:', custodyRecords);
+                      return custodyRecords.length > 0 && (
+                        <optgroup label="Personal Custody">
+                          {custodyRecords.map(custody => (
+                              <option key={custody.id} value={custody.value || `custody:${custody.id}`}>
+                                {custody.displayName || `User_custody_${custody.currencyCode}: ${custody.amount.toFixed(2)}`}
+                              </option>
+                            ))}
+                        </optgroup>
+                      );
+                    })()}
+                    
+                    {/* Non-Treasury Wallets Group */}
+                    {wallets.length > 0 && (
+                      <optgroup label="Wallets">
+                        {wallets.map(wallet => (
+                          <option key={wallet.id} value={`wallet:${wallet.id}`}>
+                            {wallet.name}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
                   </select>
                 </div>
                 
@@ -323,11 +364,32 @@ export default function SellCurrencyPage() {
                     className="w-full border-gray-300 rounded-md shadow-sm focus:border-emerald-500 focus:ring-emerald-500"
                     required
                   >
-                    <option value="custody">{t('cashier.personalCustody')}</option>
                     <option value="client">{t('cashier.clientDirectly')}</option>
-                    {wallets.map(wallet => (
-                      <option key={wallet.id} value={wallet.id}>{wallet.name}</option>
-                    ))}
+                    
+                    {/* Custody Records Group */}
+                    {(() => {
+                      console.log('SellCurrencyPage: Rendering custody records in destination dropdown:', custodyRecords);
+                      return custodyRecords.length > 0 && (
+                        <optgroup label="Personal Custody">
+                          {custodyRecords.map(custody => (
+                            <option key={custody.id} value={custody.value || `custody:${custody.id}`}>
+                              {custody.displayName || `User_custody_${custody.currencyCode}: ${custody.amount.toFixed(2)}`}
+                            </option>
+                          ))}
+                        </optgroup>
+                      );
+                    })()}
+                    
+                    {/* Non-Treasury Wallets Group */}
+                    {wallets.length > 0 && (
+                      <optgroup label="Wallets">
+                        {wallets.map(wallet => (
+                          <option key={wallet.id} value={`wallet:${wallet.id}`}>
+                            {wallet.name}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
                   </select>
                 </div>
               </div>

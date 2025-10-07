@@ -120,20 +120,22 @@ export async function isUserTreasurer(userId) {
  * @param {string} treasurerId - Treasurer user ID
  * @returns {Promise<Object>} - Created wallet object
  */
-export async function createTreasuryWallet(treasurerId) {
+export async function createTreasuryWallet(treasurerId, treasurerName) {
   try {
-    console.log('Wallet Custody Helpers: Creating treasury wallet for user:', treasurerId);
+    console.log('Wallet Custody Helpers: Creating treasury wallet for user:', treasurerId, treasurerName);
     
     // Generate a UUID for the wallet
     const walletId = generateUUID();
+    
+    // Create the treasury wallet with the name pattern: "name_treasury"
+    const walletName = treasurerName ? `${treasurerName}_treasury` : 'Treasury';
     
     // Create the treasury wallet
     const { data: wallet, error } = await supabase
       .from('wallets')
       .insert({
         id: walletId,
-        name: 'Treasury',
-        user_id: treasurerId,
+        name: walletName,
         is_treasury: true
       })
       .select()
@@ -145,6 +147,24 @@ export async function createTreasuryWallet(treasurerId) {
     }
     
     console.log('Wallet Custody Helpers: Treasury wallet created:', wallet);
+    
+    // Update the user with the treasury_wallet_id only
+    const { data: updatedUser, error: userUpdateError } = await supabase
+      .from('users')
+      .update({ 
+        treasury_wallet_id: walletId
+      })
+      .eq('id', treasurerId)
+      .select('id, name, treasury_wallet_id')
+      .single();
+      
+    if (userUpdateError) {
+      console.error('Wallet Custody Helpers: Error updating user with treasury_wallet_id:', userUpdateError);
+      // Don't throw - we still want to return the wallet
+    } else {
+      console.log('Wallet Custody Helpers: User updated with treasury_wallet_id:', updatedUser);
+    }
+    
     return wallet;
   } catch (error) {
     console.error('Wallet Custody Helpers: Error in createTreasuryWallet:', error);

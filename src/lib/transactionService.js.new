@@ -1,0 +1,269 @@
+import { 
+  createBuyTransaction, 
+  createSellTransaction 
+} from './supabase/tables/transactions.js';
+import { getAllCashCustody, giveCashCustody } from './supabase/tables/cash_custody.js';
+import { getWalletById, updateWalletCurrencyBalance, updateWalletCurrency } from './supabase/tables/wallets.js';
+import { getUserCustodyRecords, updateCustodyBalance } from './supabase/tables/custody.js';
+import { generateUUID } from './uuid.js';
+import supabase from './supabase/client.js';
+
+/**
+ * Service for handling transaction API operations in a consistent way across the application
+ */
+export const transactionService = {
+  /**
+   * Creates a buy transaction (customer selling currency to us)
+   * 
+   * @param {Object} data - Transaction data
+   * @param {string} data.sourceWallet - Source wallet ID or special value ('client', 'custody:id')
+   * @param {string} data.destinationWallet - Destination wallet ID or special value ('client', 'custody:id')
+   * @param {string} data.receiveCurrencyCode - Currency received from customer
+   * @param {string} data.payCurrencyCode - Currency paid to customer
+   * @param {number} data.amount - Amount of currency to buy
+   * @param {number} data.price - Exchange rate
+   * @param {string} data.clientName - Client name for reference
+   * @returns {Promise<Object>} - Transaction result
+   */
+  createBuyTransaction: async (data) => {
+    console.log('Creating buy transaction with data:', data);
+
+    // Parse wallet types from values
+    const sourceType = data.sourceWallet ? data.sourceWallet.split(':')[0] : 'client';
+    const sourceId = data.sourceWallet ? data.sourceWallet.split(':')[1] || data.sourceWallet : null;
+    
+    const destinationType = data.destinationWallet ? data.destinationWallet.split(':')[0] : null;
+    const destinationId = data.destinationWallet ? data.destinationWallet.split(':')[1] || data.destinationWallet : null;
+    
+    console.log('Source:', sourceType, sourceId);
+    console.log('Destination:', destinationType, destinationId);
+
+    // Get current user session for cashier ID
+    const { data: sessionData } = await supabase.auth.getSession();
+    const user = sessionData?.session?.user;
+    
+    if (!user) {
+      throw new Error('User not authenticated');
+    }
+    
+    // Create transaction record
+    const transactionData = {
+      id: generateUUID(),
+      type: 'buy',
+      walletid: destinationType === 'wallet' ? destinationId : null,
+      currency_code: data.receiveCurrencyCode,
+      amount: parseFloat(data.amount),
+      exchange_currency_code: data.payCurrencyCode,
+      exchange_rate: parseFloat(data.price),
+      total_amount: parseFloat(data.total),
+      client_name: data.clientName,
+      cashier_id: user.id,
+      source: sourceType === 'client' ? 'Client' : sourceType,
+      destination: destinationType === 'client' ? 'Client' : destinationType,
+      createdat: Date.now() // Unix timestamp in milliseconds
+    };
+    
+    // Insert transaction record
+    const { data: transaction, error } = await supabase
+      .from('transactions')
+      .insert(transactionData)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    
+    // Handle destination based on type
+    if (destinationType === 'custody') {
+      console.log('Updating custody record:', destinationId);
+      
+      if (destinationId) {
+        // Update existing custody record with the amount
+        await updateCustodyBalance(destinationId, parseFloat(data.amount));
+      } else {
+        // Check if the user already has a custody record for this currency
+        const { data: custodyRecords } = await getUserCustodyRecords();
+        const existingRecord = custodyRecords.find(r => r.currencyCode === data.receiveCurrencyCode);
+        
+        if (existingRecord) {
+          // Update the existing record
+          await updateCustodyBalance(existingRecord.id, parseFloat(data.amount));
+        } else {
+          // Create a new custody record for this user and currency
+          await supabase
+            .from('custody')
+            .insert({
+              user_id: user.id,
+              currency_code: data.receiveCurrencyCode,
+              amount: parseFloat(data.amount),
+              updated_at: new Date().toISOString()
+            });
+        }
+      }
+      
+      return { transaction, destination: 'custody' };
+    } 
+    else if (destinationType === 'wallet') {
+      console.log('Updating wallet:', destinationId);
+      
+      // Update the wallet with the amount
+      await updateWalletCurrencyBalance(
+        destinationId,
+        data.receiveCurrencyCode,
+        parseFloat(data.amount)
+      );
+      
+      return { transaction, destination: 'wallet' };
+    }
+    
+    return { transaction, destination: 'client' };
+  },
+
+  /**
+   * Creates a sell transaction (us selling currency to the customer)
+   * 
+   * @param {Object} data - Transaction data
+   * @param {string} data.sourceWallet - Source wallet ID or special value ('client', 'custody:id')
+   * @param {string} data.destinationWallet - Destination wallet ID or special value ('client', 'custody:id')
+   * @param {string} data.sellCurrencyCode - Currency being sold to customer
+   * @param {string} data.receiveCurrencyCode - Currency received from customer
+   * @param {number} data.amount - Amount of currency to sell
+   * @param {number} data.price - Exchange rate
+   * @param {string} data.clientName - Client name for reference
+   * @returns {Promise<Object>} - Transaction result
+   */
+  createSellTransaction: async (data) => {
+    console.log('Creating sell transaction with data:', data);
+
+    // Parse wallet types from values
+    const sourceType = data.sourceWallet ? data.sourceWallet.split(':')[0] : null;
+    const sourceId = data.sourceWallet ? data.sourceWallet.split(':')[1] || data.sourceWallet : null;
+    
+    const destinationType = data.destinationWallet ? data.destinationWallet.split(':')[0] : 'client';
+    const destinationId = data.destinationWallet ? data.destinationWallet.split(':')[1] || data.destinationWallet : null;
+    
+    console.log('Source:', sourceType, sourceId);
+    console.log('Destination:', destinationType, destinationId);
+
+    // Get current user session for cashier ID
+    const { data: sessionData } = await supabase.auth.getSession();
+    const user = sessionData?.session?.user;
+    
+    if (!user) {
+      throw new Error('User not authenticated');
+    }
+    
+    // Source validation - check if there's enough in the source
+    if (sourceType === 'custody') {
+      // Check if there's enough in the custody record
+      const { data: custodyRecord, error } = await supabase
+        .from('custody')
+        .select('*')
+        .eq('id', sourceId)
+        .single();
+        
+      if (error) {
+        throw new Error(`Could not find custody record: ${error.message}`);
+      }
+      
+      if (parseFloat(custodyRecord.amount) < parseFloat(data.amount)) {
+        throw new Error(`Insufficient funds in custody. Available: ${custodyRecord.amount} ${custodyRecord.currency_code}`);
+      }
+    }
+    else if (sourceType === 'wallet') {
+      // Check if there's enough in the wallet
+      const wallet = await getWalletById(sourceId);
+      
+      const currencyBalance = wallet.currencies[data.sellCurrencyCode] || 0;
+      
+      if (parseFloat(currencyBalance) < parseFloat(data.amount)) {
+        throw new Error(`Insufficient funds in wallet. Available: ${currencyBalance} ${data.sellCurrencyCode}`);
+      }
+    }
+    
+    // Create transaction record
+    const transactionData = {
+      id: generateUUID(),
+      type: 'sell',
+      walletid: sourceType === 'wallet' ? sourceId : null,
+      currency_code: data.sellCurrencyCode,
+      amount: parseFloat(data.amount),
+      exchange_currency_code: data.receiveCurrencyCode,
+      exchange_rate: parseFloat(data.price),
+      total_amount: parseFloat(data.total),
+      client_name: data.clientName,
+      cashier_id: user.id,
+      source: sourceType === 'client' ? 'Client' : sourceType,
+      destination: destinationType === 'client' ? 'Client' : destinationType,
+      createdat: Date.now() // Unix timestamp in milliseconds
+    };
+    
+    // Insert transaction record
+    const { data: transaction, error } = await supabase
+      .from('transactions')
+      .insert(transactionData)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    
+    // Handle source based on type
+    if (sourceType === 'custody') {
+      console.log('Updating custody record (deducting):', sourceId);
+      
+      // Update the custody record by subtracting the amount
+      await updateCustodyBalance(sourceId, -parseFloat(data.amount));
+    } 
+    else if (sourceType === 'wallet') {
+      console.log('Updating wallet (deducting):', sourceId);
+      
+      // Update the wallet by subtracting the amount
+      await updateWalletCurrencyBalance(
+        sourceId,
+        data.sellCurrencyCode,
+        -parseFloat(data.amount)
+      );
+    }
+    
+    // Handle destination based on type (if receiving currency in exchange)
+    if (destinationType === 'custody' && data.receiveCurrencyCode && data.total > 0) {
+      console.log('Updating custody record (adding received currency):', destinationId);
+      
+      // If we're receiving currency to a specific custody record
+      if (destinationId) {
+        // Update existing custody record with received amount
+        await updateCustodyBalance(destinationId, parseFloat(data.total));
+      } else {
+        // Find custody record for this currency or create it
+        const { data: custodyRecords } = await getUserCustodyRecords();
+        const existingRecord = custodyRecords.find(r => r.currencyCode === data.receiveCurrencyCode);
+        
+        if (existingRecord) {
+          // Update existing custody record
+          await updateCustodyBalance(existingRecord.id, parseFloat(data.total));
+        } else {
+          // Create new custody record for this currency
+          await supabase
+            .from('custody')
+            .insert({
+              user_id: user.id,
+              currency_code: data.receiveCurrencyCode,
+              amount: parseFloat(data.total),
+              updated_at: new Date().toISOString()
+            });
+        }
+      }
+    } 
+    else if (destinationType === 'wallet' && data.receiveCurrencyCode && data.total > 0) {
+      console.log('Updating wallet (adding received currency):', destinationId);
+      
+      // Update the wallet with the received amount
+      await updateWalletCurrencyBalance(
+        destinationId,
+        data.receiveCurrencyCode,
+        parseFloat(data.total)
+      );
+    }
+    
+    return { transaction };
+  }
+};

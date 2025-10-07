@@ -27,11 +27,10 @@ export default function DealershipExecutionerPage() {
   const [wallets, setWallets] = useState({})
   const { show } = useToast()
   
+  // Load reference data once (prices, users, wallets)
   useEffect(() => {
-    async function loadData() {
+    async function loadReferenceData() {
       try {
-        setLoading(true)
-        
         // Load prices
         const priceData = await getPrices()
         setPrices(priceData)
@@ -76,14 +75,47 @@ export default function DealershipExecutionerPage() {
         usersData.forEach(user => {
           userMap[user.id] = user.name || user.email
         })
+      } catch (error) {
+        console.error('Error loading reference data:', error)
+        show('Failed to load reference data', 'error')
+      }
+    }
+
+    loadReferenceData()
+  }, [show, supabase])
+  
+  // Load transaction data whenever the filter changes
+  useEffect(() => {
+    async function loadTransactionData() {
+      try {
+        setLoading(true)
         
-        // Load real transactions from transactions table
-        const { transactions: transactionsData, error: txError } = await getRecentTransactions({ limit: 50 })
+        // Determine if we should only get transactions needing validation
+        let onlyNeedsValidation = false
+        let onlyValidated = false
+        
+        if (filter === 'pending') {
+          onlyNeedsValidation = true
+        } else if (filter === 'validated') {
+          onlyValidated = true
+        }
+        
+        // Load transactions based on filter
+        const { transactions: transactionsData, error: txError } = await getRecentTransactions({ 
+          limit: 50,
+          onlyNeedsValidation: onlyNeedsValidation
+        })
         
         if (txError) throw txError
         
+        // Filter for validated transactions if needed (since our API supports filtering for unvalidated directly)
+        let filteredData = transactionsData
+        if (onlyValidated) {
+          filteredData = transactionsData.filter(tx => tx.is_validated === true)
+        }
+        
         // Transform the transaction data into the format needed for the UI
-        const transformedTransactions = transactionsData.map(tx => {
+        const transformedTransactions = filteredData.map(tx => {
           // Format date and time
           const createdAt = new Date(tx.createdat || Date.now())
           const date = createdAt.toLocaleDateString('en-US')
@@ -105,13 +137,13 @@ export default function DealershipExecutionerPage() {
           
           // Get cashier name if available
           const cashierName = tx.cashier_id ? 
-            (userMap[tx.cashier_id] || profiles[tx.cashier_id] || 'Unknown Cashier') : 
+            (profiles[tx.cashier_id] || 'Unknown Cashier') : 
             'System'
           
           // Use the actual source and destination from the database if available
           // Otherwise fallback to type-based logic
-          const source = tx.source || (tx.type === 'buy' ? 'Client' : walletMap[tx.walletid] || 'Wallet')
-          const destination = tx.destination || (tx.type === 'buy' ? walletMap[tx.walletid] || 'Wallet' : 'Client')
+          const source = tx.source || (tx.type === 'buy' ? 'Client' : wallets[tx.walletid] || 'Wallet')
+          const destination = tx.destination || (tx.type === 'buy' ? wallets[tx.walletid] || 'Wallet' : 'Client')
           
           return {
             id: tx.id,
@@ -134,72 +166,92 @@ export default function DealershipExecutionerPage() {
         
         setTransactions(transformedTransactions)
       } catch (error) {
-        console.error('Error loading data:', error)
+        console.error('Error loading transaction data:', error)
         show('Failed to load transaction data', 'error')
       } finally {
         setLoading(false)
       }
     }
 
-    loadData()
-  }, [show, supabase])
+    loadTransactionData()
+  }, [filter, show, supabase, profiles, wallets])
   
-  const handleValidate = async (id) => {
+  // Handle transaction validation
+  const handleValidateTransaction = async (transactionId, decision, notes = '') => {
     try {
-      // Update the transaction record to mark it as validated
-      // Get the current user first
-      const { data: { user } } = await supabase.auth.getUser();
+      // Get current user session for validator ID
+      const { data: sessionData } = await supabase.auth.getSession()
+      const user = sessionData?.session?.user
       
-      const { error } = await supabase
-        .from('transactions')
-        .update({ 
-          is_validated: true, 
-          validated_at: Date.now(), // Using consistent timestamp format
-          // Get the current user's ID
-          validator_id: user?.id // Correct column name based on schema
-        })
-        .eq('id', id)
+      if (!user) {
+        throw new Error('User not authenticated')
+      }
+      
+      // Create a validation record
+      const validationData = {
+        transaction_id: transactionId,
+        validator_id: user.id,
+        is_approved: decision === 'approve',
+        notes: notes,
+        validated_at: new Date().toISOString(),
+        type: 'transaction_validation'
+      }
+      
+      const { data, error } = await supabase
+        .from('transaction_validations')
+        .insert(validationData)
+        .select()
+        .single()
       
       if (error) throw error
       
-      // Update local state
-      setTransactions(prevTransactions => 
-        prevTransactions.map(transaction => 
-          transaction.id === id ? { ...transaction, status: 'validated' } : transaction
-        )
-      )
+      // Update the transaction status
+      const { error: txError } = await supabase
+        .from('transactions')
+        .update({
+          is_validated: decision === 'approve',
+          validated_by: user.id,
+          validated_at: new Date().toISOString(),
+          validation_notes: notes
+        })
+        .eq('id', transactionId)
       
-      show('Transaction validated successfully', 'success')
+      if (txError) throw txError
       
-      // Create a notification for the cashier if we have their ID
-      const transaction = transactions.find(t => t.id === id)
-      if (transaction && transaction.rawData.cashier_id) {
-        try {
-          const { error: notificationError } = await supabase
-            .from('notifications')
-            .insert({
-              id: crypto.randomUUID(),
-              user_id: transaction.rawData.cashier_id,
-              title: 'Transaction Validated',
-              message: `Your ${transaction.type} transaction for ${transaction.amount} ${transaction.currency} has been validated`,
-              type: 'transaction_validation',
-              reference_id: id,
-              requires_action: false,
-              is_read: false
-            })
-          
-          if (notificationError) {
-            console.error('Error creating notification:', notificationError)
+      // If the current filter is pending, remove this transaction from the list
+      if (filter === 'pending') {
+        setTransactions(prev => prev.filter(tx => tx.id !== transactionId))
+      } else {
+        // Otherwise update its status in the list
+        setTransactions(prev => prev.map(tx => {
+          if (tx.id === transactionId) {
+            return {
+              ...tx,
+              status: decision === 'approve' ? 'validated' : 'rejected',
+              validatedById: user.id,
+              validatedByName: profiles[user.id] || user.email,
+              notes: notes
+            }
           }
-        } catch (notifyError) {
-          console.error('Error creating notification:', notifyError)
-          // Continue - notification is not critical to validation success
-        }
+          return tx
+        }))
       }
+      
+      // Close modal if open
+      setShowDetailsModal(false)
+      
+      // Show success message
+      show('success', t('executioner.validationSuccess'), t('executioner.transactionProcessed'))
+      
     } catch (error) {
       console.error('Error validating transaction:', error)
-      show('Failed to validate transaction', 'error')
+      show('error', t('common.errorOccurred'), error.message)
     }
+  }
+  
+  // Map old validation method to new one for backward compatibility
+  const handleValidate = (id) => {
+    handleValidateTransaction(id, 'approve')
   }
   
   const handleShowDetails = (transaction) => {
@@ -212,9 +264,10 @@ export default function DealershipExecutionerPage() {
     setSelectedTransaction(null)
   }
   
+  // Filter transactions based on search term (status filtering happens during data loading)
   const filteredTransactions = transactions.filter(transaction => {
     // Apply search term filter
-    const matchesSearch = 
+    const matchesSearch = searchTerm === '' || 
       transaction.cashierName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (transaction.treasurerName?.toLowerCase().includes(searchTerm.toLowerCase())) ||
       (transaction.clientName?.toLowerCase().includes(searchTerm.toLowerCase())) ||
@@ -223,13 +276,7 @@ export default function DealershipExecutionerPage() {
       transaction.destination?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (transaction.notes?.toLowerCase().includes(searchTerm.toLowerCase()))
     
-    // Apply status filter
-    const matchesFilter = 
-      filter === 'all' || 
-      (filter === 'pending' && transaction.status === 'needs-validation') ||
-      (filter === 'validated' && transaction.status === 'validated')
-    
-    return matchesSearch && matchesFilter
+    return matchesSearch
   })
 
   return (
@@ -314,7 +361,10 @@ export default function DealershipExecutionerPage() {
                     <span className="text-sm font-medium">{t('executioner.filter')}:</span>
                     <select
                       value={filter}
-                      onChange={(e) => setFilter(e.target.value)}
+                      onChange={(e) => {
+                        setFilter(e.target.value)
+                        setSearchTerm('') // Reset search when changing filters
+                      }}
                       className="border-gray-300 rounded-md shadow-sm focus:border-emerald-500 focus:ring-emerald-500"
                     >
                       <option value="all">All</option>

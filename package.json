@@ -8,6 +8,8 @@
     "build": "vite build",
     "preview": "vite preview --host",
     "migrate": "node run-migrations-enhanced.js",
+    "migrate:simple": "node run-migrations-simple.js",
+    "fix:roles": "node fix-roles-table.js",
     "migrate:action-payload": "node -e \"import('./run-migrations-enhanced.js').then(m => m.runMigration('./migrations/add-action-payload-column.sql', 'Action Payload Column', true))\""
   },
   "dependencies": {
