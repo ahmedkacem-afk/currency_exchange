@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getCashiers, getWallets, giveCashCustody } from '../lib/api';
-import Layout from '../components/Layout';
 import { Card } from '../components/Card';
 import Input from '../components/Input';
 import Button from '../components/Button';
@@ -135,7 +134,6 @@ export default function GiveCustody() {
   };
 
   return (
-    <Layout>
       <div className="max-w-2xl mx-auto px-4 py-6">
         <h1 className="text-2xl font-bold mb-6">Give Cash Custody</h1>
         
@@ -259,6 +257,5 @@ export default function GiveCustody() {
           </form>
         </Card>
       </div>
-    </Layout>
   );
 }

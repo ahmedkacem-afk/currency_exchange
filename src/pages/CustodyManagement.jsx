@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getAllCashCustody, updateCustodyStatus } from '../lib/api';
-import Layout from '../components/Layout';
 import { Card } from '../components/Card';
 import Button from '../components/Button';
 import { useToast } from '../components/Toast';
+import { useI18n } from '../i18n/I18nProvider';
 
 /**
  * CustodyManagement Component
@@ -16,6 +16,7 @@ export default function CustodyManagement() {
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
   const { show } = useToast();
+  const { t } = useI18n();
 
   // Load custody records
   useEffect(() => {
@@ -31,8 +32,8 @@ export default function CustodyManagement() {
       console.error('Error fetching custody records:', error);
       show({
         type: 'error',
-        title: 'Failed to Load',
-        message: 'Could not load custody records. ' + error.message
+        title: t('common.failedToLoadData'),
+        message: t('common.failedToLoadData') + ': ' + error.message
       });
     } finally {
       setLoading(false);
@@ -44,16 +45,16 @@ export default function CustodyManagement() {
       await updateCustodyStatus(custodyId, 'approved');
       show({
         type: 'success',
-        title: 'Custody Approved',
-        message: 'You have successfully approved the custody request'
+        title: t('custodyManagement.approved'),
+        message: t('custodyManagement.approvalSuccess')
       });
       fetchCustodyRecords(); // Refresh the list
     } catch (error) {
       console.error('Error approving custody:', error);
       show({
         type: 'error',
-        title: 'Approval Failed',
-        message: 'Could not approve the custody request. ' + error.message
+        title: t('custodyManagement.approvalFailed'),
+        message: t('custodyManagement.approvalFailed') + ': ' + error.message
       });
     }
   };
@@ -63,16 +64,16 @@ export default function CustodyManagement() {
       await updateCustodyStatus(custodyId, 'rejected');
       show({
         type: 'success',
-        title: 'Custody Rejected',
-        message: 'You have rejected the custody request'
+        title: t('custodyManagement.rejected'),
+        message: t('custodyManagement.rejectionSuccess')
       });
       fetchCustodyRecords(); // Refresh the list
     } catch (error) {
       console.error('Error rejecting custody:', error);
       show({
         type: 'error',
-        title: 'Rejection Failed',
-        message: 'Could not reject the custody request. ' + error.message
+        title: t('custodyManagement.rejectionFailed'),
+        message: t('custodyManagement.rejectionFailed') + ': ' + error.message
       });
     }
   };
@@ -82,58 +83,51 @@ export default function CustodyManagement() {
       await updateCustodyStatus(custodyId, 'returned');
       show({
         type: 'success',
-        title: 'Custody Returned',
-        message: 'The custody has been marked as returned'
+        title: t('custodyManagement.returned'),
+        message: t('custodyManagement.returnSuccess')
       });
       fetchCustodyRecords(); // Refresh the list
     } catch (error) {
       console.error('Error returning custody:', error);
       show({
         type: 'error',
-        title: 'Return Failed',
-        message: 'Could not mark the custody as returned. ' + error.message
+        title: t('custodyManagement.returnFailed'),
+        message: t('custodyManagement.returnFailed') + ': ' + error.message
       });
     }
   };
 
   return (
-    <Layout>
       <div className="max-w-6xl mx-auto px-4 py-6">
-        <h1 className="text-2xl font-bold mb-6">Cash Custody Management</h1>
+        <h1 className="text-2xl font-bold mb-6">{t('custodyManagement.title')}</h1>
 
         <div className="flex gap-4 mb-6">
-          <Button 
-            onClick={() => navigate('/give-custody')}
-            className="bg-blue-600 hover:bg-blue-700 text-white"
-          >
-            Give New Custody
-          </Button>
           <Button 
             onClick={fetchCustodyRecords}
             className="bg-gray-600 hover:bg-gray-700 text-white"
           >
-            Refresh
+            {t('custodyManagement.refresh')}
           </Button>
         </div>
 
         {/* Custody Given (by me as treasurer) */}
         <Card className="mb-6">
-          <h2 className="text-xl font-semibold mb-4">Custody Given</h2>
+          <h2 className="text-xl font-semibold mb-4">{t('custodyManagement.custodyGiven')}</h2>
           {loading ? (
-            <p className="text-gray-500">Loading...</p>
+            <p className="text-gray-500">{t('common.loading')}</p>
           ) : custodyRecords.given.length === 0 ? (
-            <p className="text-gray-500">No custody records given</p>
+            <p className="text-gray-500">{t('custodyManagement.noCustodyGiven')}</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="min-w-full bg-white">
                 <thead>
                   <tr>
-                    <th className="py-2 px-4 border-b text-left">Date</th>
-                    <th className="py-2 px-4 border-b text-left">Cashier</th>
-                    <th className="py-2 px-4 border-b text-left">Wallet</th>
-                    <th className="py-2 px-4 border-b text-right">Amount</th>
-                    <th className="py-2 px-4 border-b text-center">Status</th>
-                    <th className="py-2 px-4 border-b text-center">Actions</th>
+                    <th className="py-2 px-4 border-b text-left">{t('custodyManagement.date')}</th>
+                    <th className="py-2 px-4 border-b text-left">{t('custodyManagement.cashier')}</th>
+                    <th className="py-2 px-4 border-b text-left">{t('custodyManagement.wallet')}</th>
+                    <th className="py-2 px-4 border-b text-right">{t('custodyManagement.amount')}</th>
+                    <th className="py-2 px-4 border-b text-center">{t('custodyManagement.status')}</th>
+                    <th className="py-2 px-4 border-b text-center">{t('custodyManagement.actions')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -158,7 +152,11 @@ export default function CustodyManagement() {
                           record.status === 'rejected' ? 'bg-red-100 text-red-800' :
                           record.status === 'returned' ? 'bg-blue-100 text-blue-800' : ''
                         }`}>
-                          {record.status.charAt(0).toUpperCase() + record.status.slice(1)}
+                          {record.status === 'pending' ? t('custodyManagement.pending') :
+                           record.status === 'approved' ? t('custodyManagement.approved') :
+                           record.status === 'rejected' ? t('custodyManagement.rejected') :
+                           record.status === 'returned' ? t('custodyManagement.returned') :
+                           record.status.charAt(0).toUpperCase() + record.status.slice(1)}
                         </span>
                       </td>
                       <td className="py-2 px-4 border-b text-center">
@@ -167,7 +165,7 @@ export default function CustodyManagement() {
                             onClick={() => handleReturn(record.id)}
                             className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 text-sm"
                           >
-                            Mark Returned
+                            {t('custodyManagement.markReturned')}
                           </Button>
                         )}
                       </td>
@@ -181,22 +179,22 @@ export default function CustodyManagement() {
 
         {/* Custody Received (as cashier) */}
         <Card>
-          <h2 className="text-xl font-semibold mb-4">Custody Received</h2>
+          <h2 className="text-xl font-semibold mb-4">{t('custodyManagement.custodyReceived')}</h2>
           {loading ? (
-            <p className="text-gray-500">Loading...</p>
+            <p className="text-gray-500">{t('common.loading')}</p>
           ) : custodyRecords.received.length === 0 ? (
-            <p className="text-gray-500">No custody records received</p>
+            <p className="text-gray-500">{t('custodyManagement.noCustodyReceived')}</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="min-w-full bg-white">
                 <thead>
                   <tr>
-                    <th className="py-2 px-4 border-b text-left">Date</th>
-                    <th className="py-2 px-4 border-b text-left">Treasurer</th>
-                    <th className="py-2 px-4 border-b text-left">Wallet</th>
-                    <th className="py-2 px-4 border-b text-right">Amount</th>
-                    <th className="py-2 px-4 border-b text-center">Status</th>
-                    <th className="py-2 px-4 border-b text-center">Actions</th>
+                    <th className="py-2 px-4 border-b text-left">{t('custodyManagement.date')}</th>
+                    <th className="py-2 px-4 border-b text-left">{t('custodyManagement.treasurer')}</th>
+                    <th className="py-2 px-4 border-b text-left">{t('custodyManagement.wallet')}</th>
+                    <th className="py-2 px-4 border-b text-right">{t('custodyManagement.amount')}</th>
+                    <th className="py-2 px-4 border-b text-center">{t('custodyManagement.status')}</th>
+                    <th className="py-2 px-4 border-b text-center">{t('custodyManagement.actions')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -221,7 +219,11 @@ export default function CustodyManagement() {
                           record.status === 'rejected' ? 'bg-red-100 text-red-800' :
                           record.status === 'returned' ? 'bg-blue-100 text-blue-800' : ''
                         }`}>
-                          {record.status.charAt(0).toUpperCase() + record.status.slice(1)}
+                          {record.status === 'pending' ? t('custodyManagement.pending') :
+                           record.status === 'approved' ? t('custodyManagement.approved') :
+                           record.status === 'rejected' ? t('custodyManagement.rejected') :
+                           record.status === 'returned' ? t('custodyManagement.returned') :
+                           record.status.charAt(0).toUpperCase() + record.status.slice(1)}
                         </span>
                       </td>
                       <td className="py-2 px-4 border-b text-center">
@@ -231,13 +233,13 @@ export default function CustodyManagement() {
                               onClick={() => handleApprove(record.id)}
                               className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 text-sm"
                             >
-                              Approve
+                              {t('custodyManagement.approve')}
                             </Button>
                             <Button
                               onClick={() => handleReject(record.id)}
                               className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 text-sm"
                             >
-                              Reject
+                              {t('custodyManagement.reject')}
                             </Button>
                           </div>
                         )}
@@ -250,6 +252,5 @@ export default function CustodyManagement() {
           )}
         </Card>
       </div>
-    </Layout>
   );
 }

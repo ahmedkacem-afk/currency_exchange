@@ -20,24 +20,22 @@ export default function CustodyApprovalButton({ custodyId, status, onSuccess }) 
       setSubmitting(true);
       await updateCustodyStatus(custodyId, status);
       
-      show({
-        type: 'success',
-        title: isApprove ? 'Custody Approved' : 'Custody Rejected',
-        message: isApprove 
+      show(
+        isApprove 
           ? 'You have successfully approved the custody request' 
-          : 'You have rejected the custody request'
-      });
+          : 'You have rejected the custody request',
+        'success'
+      );
       
       if (typeof onSuccess === 'function') {
         onSuccess();
       }
     } catch (error) {
       console.error('Error updating custody status:', error);
-      show({
-        type: 'error',
-        title: 'Update Failed',
-        message: `Failed to ${isApprove ? 'approve' : 'reject'} the custody request: ${error.message}`
-      });
+      show(
+        `Failed to ${isApprove ? 'approve' : 'reject'} the custody request: ${error.message}`,
+        'error'
+      );
     } finally {
       setSubmitting(false);
     }

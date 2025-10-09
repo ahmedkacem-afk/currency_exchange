@@ -11,7 +11,7 @@ import SellCurrencyPage from './pages/SellCurrencyPage.jsx'
 import DealershipExecutionerPage from './pages/DealershipExecutionerPage.jsx'
 import DebtManagementPage from './pages/DebtManagementPage.jsx'
 import TreasurerPage from './pages/TreasurerPage.jsx'
-import TreasurerDemoPage from './pages/TreasurerDemoPage.jsx'
+// Treasurer Demo removed
 import CustodyManagement from './pages/CustodyManagement.jsx'
 import GiveCustody from './pages/GiveCustody.jsx'
 import UserManagement from './pages/UserManagement.jsx'
@@ -64,7 +64,7 @@ function AppRoutes() {
         <Route path="/unauthorized" element={<UnauthorizedPage />} />
         
         {/* Public demo route - accessible without login */}
-        <Route path="/treasurer-demo" element={<TreasurerDemoPage />} />
+        {/* Treasurer Demo route removed */}
         
         {/* Routes accessible to any authenticated user */}
         <Route element={<ProtectedRoute />}>

@@ -9,24 +9,59 @@ export function Sidebar({ isOpen, setIsOpen, profile, dir }) {
 
   return (
     <>
-      {/* Overlay */}
+      {/* Overlay - only visible on mobile */}
       <div 
         className={`fixed inset-0 bg-black/40 backdrop-blur-sm transition-opacity ${isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'} md:hidden z-30`} 
         onClick={() => setIsOpen(false)} 
       />
       
-      {/* Side drawer */}
+      {/* Side drawer - visible on all screens */}
       <div 
-        className={`fixed top-0 bottom-0 ${dir === 'rtl' ? 'right-0' : 'left-0'} h-full w-72 bg-gradient-to-b from-emerald-50 to-white shadow-xl z-40 transform transition-transform duration-300 ease-in-out md:hidden ${dir === 'rtl' ? 'rounded-l-xl' : 'rounded-r-xl'} ${isOpen ? 'translate-x-0' : dir === 'rtl' ? 'translate-x-full' : '-translate-x-full'}`}
+        className={`fixed top-0 bottom-0 ${dir === 'rtl' ? 'right-0' : 'left-0'} h-full w-72 bg-gradient-to-b from-emerald-50 to-white shadow-xl z-40 transform transition-transform duration-300 ease-in-out ${dir === 'rtl' ? 'rounded-l-xl' : 'rounded-r-xl'} ${
+          // Use isOpen state for both mobile and desktop
+          isOpen ? 'translate-x-0' : 
+          dir === 'rtl' ? 'translate-x-full' : '-translate-x-full'
+        }`}
       >
+        {/* Collapse button alongside sidebar edge - only visible on desktop */}
+        <button 
+          onClick={() => {
+            const newState = !isOpen;
+            setIsOpen(newState);
+            localStorage.setItem('sidebarState', newState ? 'open' : 'closed');
+          }}
+          className={`hidden md:flex absolute top-20 bg-emerald-600 text-white rounded-full p-1.5 shadow-md hover:bg-emerald-700 transform transition-transform duration-300 ${
+            dir === 'rtl' 
+              ? 'right-auto -left-4' // For RTL: position on left side
+              : '-right-4'           // For LTR: position on right side
+          }`}
+          aria-label={isOpen ? t('sidebar.collapse', 'Collapse sidebar') : t('sidebar.expand', 'Expand sidebar')}
+        >
+          <svg 
+            xmlns="http://www.w3.org/2000/svg" 
+            width="18" 
+            height="18" 
+            viewBox="0 0 24 24" 
+            fill="none" 
+            stroke="currentColor" 
+            strokeWidth="2" 
+            strokeLinecap="round" 
+            strokeLinejoin="round"
+            className={dir === 'rtl' ? 'rotate-180' : ''}
+          >
+            {/* Arrow pointing left for LTR, will be flipped for RTL */}
+            <polyline points="15 18 9 12 15 6"></polyline>
+          </svg>
+        </button>
         <div className="flex flex-col h-full">
           {/* Header with user info */}
           <div className="p-5 border-b border-emerald-100 bg-gradient-to-r from-emerald-50 to-emerald-100">
             <div className="flex items-center justify-between mb-2">
               <h2 className="font-semibold text-emerald-800">{t('appTitle')}</h2>
+              {/* Close button - only for mobile */}
               <button 
                 onClick={() => setIsOpen(false)} 
-                className="p-1.5 rounded-full hover:bg-white/50 text-emerald-700"
+                className="p-1.5 rounded-full hover:bg-white/50 text-emerald-700 md:hidden"
                 aria-label="Close menu"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -105,16 +140,7 @@ export function Sidebar({ isOpen, setIsOpen, profile, dir }) {
                   </div>
                 )}
               </NavLink>
-              <NavLink onClick={() => setIsOpen(false)} to="/treasurer-demo">
-                {({ isActive }) => (
-                  <div className={`px-4 py-3 rounded-lg flex items-center transition-colors ${isActive ? 'bg-emerald-600 text-white shadow-sm' : 'text-emerald-900 hover:bg-emerald-50'}`}>
-                    <svg className={`w-5 h-5 mr-2.5 ${isActive ? 'text-emerald-100' : 'text-emerald-500'}`} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M12 2v20m-9-7l18 0m-9-13l-9 13h18l-9-13z"></path>
-                    </svg>
-                    <span>Treasurer Demo</span>
-                  </div>
-                )}
-              </NavLink>
+
               <NavLink onClick={() => setIsOpen(false)} to="/dealership-executioner">
                 {({ isActive }) => (
                   <div className={`px-4 py-3 rounded-lg flex items-center transition-colors ${isActive ? 'bg-emerald-600 text-white shadow-sm' : 'text-emerald-900 hover:bg-emerald-50'}`}>

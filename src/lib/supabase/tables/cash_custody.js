@@ -28,41 +28,119 @@ export async function getAllCashCustody() {
     
     console.log('Cash Custody API: Fetching custody records for user ID:', user.id);
     
-    // Get both types of custody records in parallel
-    const [givenResponse, receivedResponse] = await Promise.all([
+    // Use a try-catch for each query to handle potential schema issues
+    let givenRecords = [];
+    let receivedRecords = [];
+    
+    try {
       // Custody given to cashiers (user is the treasurer)
-      supabase
+      const givenResponse = await supabase
         .from('cash_custody')
         .select('*')
         .eq('treasurer_id', user.id)
-        .order('created_at', { ascending: false }),
+        .order('created_at', { ascending: false });
       
+      if (givenResponse.error) {
+        console.warn('Error fetching given custody records:', givenResponse.error);
+      } else {
+        givenRecords = givenResponse.data || [];
+      }
+    } catch (error) {
+      console.warn('Exception fetching given custody records:', error);
+    }
+    
+    try {
       // Custody received from treasurer (user is the cashier)
-      supabase
+      const receivedResponse = await supabase
         .from('cash_custody')
         .select('*')
         .eq('cashier_id', user.id)
-        .order('created_at', { ascending: false })
-    ]);
+        .order('created_at', { ascending: false });
+      
+      if (receivedResponse.error) {
+        console.warn('Error fetching received custody records:', receivedResponse.error);
+      } else {
+        receivedRecords = receivedResponse.data || [];
+      }
+    } catch (error) {
+      console.warn('Exception fetching received custody records:', error);
+    }
     
-    // Check for errors
-    if (givenResponse.error) throw givenResponse.error;
-    if (receivedResponse.error) throw receivedResponse.error;
+    // Exit early if we couldn't get any records
+    if (givenRecords.length === 0 && receivedRecords.length === 0) {
+      return { given: [], received: [] };
+    }
     
-    // Add placeholder user and wallet data (since we can't access the profiles table)
-    const enhancedGivenRecords = givenResponse.data?.map(record => ({
+    // Get all unique user IDs from both responses
+    const userIds = new Set();
+    const walletIds = new Set();
+    
+    [...givenRecords, ...receivedRecords].forEach(record => {
+      if (record.treasurer_id) userIds.add(record.treasurer_id);
+      if (record.cashier_id) userIds.add(record.cashier_id);
+      if (record.wallet_id) walletIds.add(record.wallet_id);
+    });
+    
+    // Initialize maps for lookup
+    const userMap = {};
+    const walletMap = {};
+    
+    // Only try to fetch users if we have IDs to fetch
+    if (userIds.size > 0) {
+      try {
+        // Fetch all relevant users in a single query
+        const { data: users, error: usersError } = await supabase
+          .from('users')
+          .select('id, name, email')
+          .in('id', Array.from(userIds));
+          
+        if (!usersError && users) {
+          users.forEach(user => {
+            userMap[user.id] = user;
+          });
+        } else {
+          console.warn('Error fetching user data:', usersError);
+        }
+      } catch (error) {
+        console.warn('Exception fetching user data:', error);
+      }
+    }
+    
+    // Only try to fetch wallets if we have IDs to fetch
+    if (walletIds.size > 0) {
+      try {
+        // Fetch all relevant wallets in a single query
+        const { data: wallets, error: walletsError } = await supabase
+          .from('wallets')
+          .select('id, name, usd, lyd')
+          .in('id', Array.from(walletIds));
+          
+        if (!walletsError && wallets) {
+          wallets.forEach(wallet => {
+            walletMap[wallet.id] = wallet;
+          });
+        } else {
+          console.warn('Error fetching wallet data:', walletsError);
+        }
+      } catch (error) {
+        console.warn('Exception fetching wallet data:', error);
+      }
+    }
+    
+    // Enhance the custody records with user and wallet data
+    const enhancedGivenRecords = givenRecords.map(record => ({
       ...record,
-      treasurer: { id: record.treasurer_id, name: `Treasurer ${record.treasurer_id.substring(0, 6)}` },
-      cashier: { id: record.cashier_id, name: `Cashier ${record.cashier_id.substring(0, 6)}` },
-      wallet: { id: record.wallet_id, name: `Wallet ${record.wallet_id.substring(0, 6)}` }
-    })) || [];
+      treasurer: userMap[record.treasurer_id] || { id: record.treasurer_id, name: `Treasurer (${record.treasurer_id?.slice(0, 8) || 'Unknown'})` },
+      cashier: userMap[record.cashier_id] || { id: record.cashier_id, name: `Cashier (${record.cashier_id?.slice(0, 8) || 'Unknown'})` },
+      wallet: walletMap[record.wallet_id] || { id: record.wallet_id, name: `Wallet (${record.wallet_id?.slice(0, 8) || 'Unknown'})` }
+    }));
     
-    const enhancedReceivedRecords = receivedResponse.data?.map(record => ({
+    const enhancedReceivedRecords = receivedRecords.map(record => ({
       ...record,
-      treasurer: { id: record.treasurer_id, name: `Treasurer ${record.treasurer_id.substring(0, 6)}` },
-      cashier: { id: record.cashier_id, name: `Cashier ${record.cashier_id.substring(0, 6)}` },
-      wallet: { id: record.wallet_id, name: `Wallet ${record.wallet_id.substring(0, 6)}` }
-    })) || [];
+      treasurer: userMap[record.treasurer_id] || { id: record.treasurer_id, name: `Treasurer (${record.treasurer_id?.slice(0, 8) || 'Unknown'})` },
+      cashier: userMap[record.cashier_id] || { id: record.cashier_id, name: `Cashier (${record.cashier_id?.slice(0, 8) || 'Unknown'})` },
+      wallet: walletMap[record.wallet_id] || { id: record.wallet_id, name: `Wallet (${record.wallet_id?.slice(0, 8) || 'Unknown'})` }
+    }));
     
     return {
       given: enhancedGivenRecords,
@@ -98,20 +176,162 @@ export async function updateCustodyStatus(custodyId, status) {
       throw new Error('User not authenticated');
     }
     
-    // Update the status
-    const { data, error } = await supabase
+    // Get the custody record first
+    const { data: custodyRecord, error: custodyError } = await supabase
       .from('cash_custody')
-      .update({ 
-        status: status,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', custodyId)
       .select('*')
+      .eq('id', custodyId)
       .single();
+      
+    if (custodyError) throw custodyError;
     
-    if (error) throw error;
-    
-    return data;
+    // Update the status
+    try {
+      const { data, error } = await supabase
+        .from('cash_custody')
+        .update({ 
+          status: status,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', custodyId)
+        .select('*')
+        .single();
+      
+      if (error) throw error;
+      
+      // Handle wallet balance updates based on status change
+      if (status === 'approved') {
+        // When approved, create a custody record for the cashier
+        console.log('Cash Custody API: Creating custody record for cashier');
+        
+        try {
+          // Get the wallet to update its balance
+          const { data: wallet } = await supabase
+            .from('wallets')
+            .select('*')
+            .eq('id', custodyRecord.wallet_id)
+            .single();
+            
+          // Create custody record in the custody table
+          await supabase
+            .from('custody')
+            .insert({
+              id: generateUUID(),
+              user_id: custodyRecord.cashier_id,
+              wallet_id: custodyRecord.wallet_id,
+              amount: custodyRecord.amount,
+              currency_code: custodyRecord.currency_code,
+              status: 'active',
+              created_at: new Date().toISOString(),
+              custody_record_id: custodyRecord.id
+            });
+        } catch (e) {
+          console.error('Cash Custody API: Error creating custody record:', e);
+          // Don't throw here, as we already approved the custody request
+        }
+      } else if (status === 'rejected') {
+        // When rejected, return the money to the wallet
+        try {
+          await updateWalletCurrencyBalance(
+            custodyRecord.wallet_id, 
+            custodyRecord.currency_code, 
+            custodyRecord.amount, 
+            'add'
+          );
+          console.log('Cash Custody API: Returned funds to wallet after rejection');
+        } catch (e) {
+          console.error('Cash Custody API: Error returning funds to wallet:', e);
+        }
+      } else if (status === 'returned') {
+        // When returned, return the money to the wallet
+        try {
+          await updateWalletCurrencyBalance(
+            custodyRecord.wallet_id, 
+            custodyRecord.currency_code, 
+            custodyRecord.amount, 
+            'add'
+          );
+          
+          // Update any custody records to inactive
+          await supabase
+            .from('custody')
+            .update({ status: 'inactive' })
+            .eq('custody_record_id', custodyRecord.id);
+            
+          console.log('Cash Custody API: Returned funds to wallet after return');
+        } catch (e) {
+          console.error('Cash Custody API: Error returning funds to wallet:', e);
+        }
+      }
+      
+      // Fetch related data
+      if (data) {
+        // Initialize defaults with ID information for fallbacks
+        let treasurerData = { id: data.treasurer_id, name: `Treasurer (${data.treasurer_id?.slice(0, 8) || 'Unknown'})` };
+        let cashierData = { id: data.cashier_id, name: `Cashier (${data.cashier_id?.slice(0, 8) || 'Unknown'})` };
+        let walletData = { id: data.wallet_id, name: `Wallet (${data.wallet_id?.slice(0, 8) || 'Unknown'})` };
+        
+        // Try to get treasurer data
+        try {
+          const { data: treasurer, error: treasurerError } = await supabase
+            .from('users')
+            .select('id, name, email')
+            .eq('id', data.treasurer_id)
+            .single();
+          
+          if (!treasurerError && treasurer) {
+            treasurerData = treasurer;
+          }
+        } catch (e) {
+          console.warn('Error fetching treasurer data:', e);
+        }
+        
+        // Try to get cashier data
+        try {
+          const { data: cashier, error: cashierError } = await supabase
+            .from('users')
+            .select('id, name, email')
+            .eq('id', data.cashier_id)
+            .single();
+          
+          if (!cashierError && cashier) {
+            cashierData = cashier;
+          }
+        } catch (e) {
+          console.warn('Error fetching cashier data:', e);
+        }
+        
+        // Try to get wallet data
+        try {
+          const { data: wallet, error: walletError } = await supabase
+            .from('wallets')
+            .select('id, name, currency_code')
+            .eq('id', data.wallet_id)
+            .single();
+          
+          if (!walletError && wallet) {
+            walletData = wallet;
+          }
+        } catch (e) {
+          console.warn('Error fetching wallet data:', e);
+        }
+        
+        // Enhance the record with related data
+        const enhancedData = {
+          ...data,
+          treasurer: treasurerData,
+          cashier: cashierData,
+          wallet: walletData
+        };
+        
+        return enhancedData;
+      }
+      
+      return data;
+    } catch (updateError) {
+      console.error('Error updating custody status:', updateError);
+      throw updateError;
+    }
   } catch (error) {
     console.error('Cash Custody API: Error in updateCustodyStatus:', error);
     throw handleApiError(error, 'Update Custody Status');
@@ -291,6 +511,20 @@ export async function giveCashCustody(data) {
       updated_at: new Date().toISOString()
     };
     
+    // First subtract the amount from the wallet
+    try {
+      await updateWalletCurrencyBalance(
+        walletId,
+        currencyCode,
+        amount,
+        'subtract'
+      );
+      console.log(`Cash Custody API: Subtracted ${amount} ${currencyCode} from wallet ${walletId}`);
+    } catch (error) {
+      console.error('Cash Custody API: Error subtracting from wallet:', error);
+      throw new Error(`Failed to subtract amount from wallet: ${error.message}`);
+    }
+    
     // Insert the custody record
     const { data: insertedRecord, error: insertError } = await supabase
       .from('cash_custody')
@@ -300,7 +534,79 @@ export async function giveCashCustody(data) {
       
     if (insertError) {
       console.error('Cash Custody API: Error inserting cash_custody record:', insertError);
+      // Try to restore the funds if the record insertion failed
+      try {
+        await updateWalletCurrencyBalance(
+          walletId,
+          currencyCode,
+          amount,
+          'add'
+        );
+        console.log(`Cash Custody API: Restored ${amount} ${currencyCode} to wallet ${walletId} after failure`);
+      } catch (restoreError) {
+        console.error('Cash Custody API: Error restoring funds to wallet:', restoreError);
+      }
       throw insertError;
+    }
+    
+    // Fetch related data separately if record was inserted successfully
+    if (insertedRecord) {
+      // Get user data for treasurer and cashier
+      let treasurerData = { id: insertedRecord.treasurer_id, name: `Treasurer (${insertedRecord.treasurer_id?.slice(0, 8) || 'Unknown'})` };
+      let cashierData = { id: insertedRecord.cashier_id, name: `Cashier (${insertedRecord.cashier_id?.slice(0, 8) || 'Unknown'})` };
+      let walletData = { id: insertedRecord.wallet_id, name: `Wallet (${insertedRecord.wallet_id?.slice(0, 8) || 'Unknown'})` };
+      
+      try {
+        // Get treasurer data
+        const { data: treasurer } = await supabase
+          .from('users')
+          .select('id, name, email')
+          .eq('id', insertedRecord.treasurer_id)
+          .single();
+          
+        if (treasurer) {
+          treasurerData = treasurer;
+        }
+      } catch (e) {
+        console.warn('Error fetching treasurer data:', e);
+      }
+      
+      try {
+        // Get cashier data
+        const { data: cashier } = await supabase
+          .from('users')
+          .select('id, name, email')
+          .eq('id', insertedRecord.cashier_id)
+          .single();
+          
+        if (cashier) {
+          cashierData = cashier;
+        }
+      } catch (e) {
+        console.warn('Error fetching cashier data:', e);
+      }
+      
+      try {
+        // Get wallet data
+        const { data: wallet } = await supabase
+          .from('wallets')
+          .select('id, name, currency_code')
+          .eq('id', insertedRecord.wallet_id)
+          .single();
+          
+        if (wallet) {
+          walletData = wallet;
+        }
+      } catch (e) {
+        console.warn('Error fetching wallet data:', e);
+      }
+      
+      // Add the related data to the record
+      Object.assign(insertedRecord, {
+        treasurer: treasurerData,
+        cashier: cashierData,
+        wallet: walletData
+      });
     }
     
     // Check if the cashier already has a custody record for this currency

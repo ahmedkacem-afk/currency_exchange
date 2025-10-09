@@ -16,17 +16,9 @@ export function Header({ isAuthenticated, isLogin, profile, toggleSidebar }) {
         <div className="flex items-center gap-3">
           {isAuthenticated && !isLogin && (
             <>
-              <nav className="hidden md:flex gap-2 text-sm">
-                <NavLink to="/" end className={({ isActive }) => `px-3 py-1.5 rounded-md border ${isActive ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-gray-800 border-gray-200 hover:bg-gray-50'}`}>{t('nav.dashboard')}</NavLink>
-                <NavLink to="/withdrawals" className={({ isActive }) => `px-3 py-1.5 rounded-md border ${isActive ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-gray-800 border-gray-200 hover:bg-gray-50'}`}>{t('nav.withdrawals')}</NavLink>
-                <NavLink to="/create" className={({ isActive }) => `px-3 py-1.5 rounded-md border ${isActive ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-gray-800 border-gray-200 hover:bg-gray-50'}`}>{t('nav.create')}</NavLink>
-                <NavLink to="/cashier" className={({ isActive }) => `px-3 py-1.5 rounded-md border ${isActive ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-gray-800 border-gray-200 hover:bg-gray-50'}`}>{t('nav.cashier')}</NavLink>
-                <NavLink to="/dealership-executioner" className={({ isActive }) => `px-3 py-1.5 rounded-md border ${isActive ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-gray-800 border-gray-200 hover:bg-gray-50'}`}>{t('nav.executioner')}</NavLink>
-                <NavLink to="/debt-management" className={({ isActive }) => `px-3 py-1.5 rounded-md border ${isActive ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-gray-800 border-gray-200 hover:bg-gray-50'}`}>{t('nav.debtManagement')}</NavLink>
-                <NavLink to="/treasurer" className={({ isActive }) => `px-3 py-1.5 rounded-md border ${isActive ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-gray-800 border-gray-200 hover:bg-gray-50'}`}>{t('nav.treasurer')}</NavLink>
-              </nav>
-              {/* Notifications */}
-              <div className="hidden md:block">
+              {/* Removed Desktop Navigation - now in sidebar */}
+              {/* Notifications - visible on all screen sizes */}
+              <div>
                 <NotificationsPanel />
               </div>
               
@@ -57,7 +49,12 @@ export function Header({ isAuthenticated, isLogin, profile, toggleSidebar }) {
                   </div>
                 </div>
               </div>
-              <button className="md:hidden p-2 rounded hover:bg-gray-100" onClick={toggleSidebar} aria-label="Menu">
+              {/* Mobile-only menu button */}
+              <button 
+                className="p-2 rounded hover:bg-gray-100 md:hidden" 
+                onClick={toggleSidebar} 
+                aria-label="Toggle Sidebar"
+              >
                 <MenuIcon />
               </button>
             </>

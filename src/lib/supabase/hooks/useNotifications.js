@@ -58,7 +58,8 @@ export function useNotifications() {
     // Clean up subscription on unmount
     return () => {
       if (subscription) {
-        subscription.unsubscribe()
+        // Use the channel.unsubscribe() method for the new realtime API
+        supabase.removeChannel(subscription)
       }
     }
   }, [fetchNotifications])

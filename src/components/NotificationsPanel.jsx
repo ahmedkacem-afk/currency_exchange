@@ -88,7 +88,7 @@ export default function NotificationsPanel() {
       
       {/* Notifications panel */}
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-96 bg-white rounded-md shadow-lg overflow-hidden z-50">
+        <div className="absolute right-0 mt-2 w-full sm:w-96 bg-white rounded-md shadow-lg overflow-hidden z-50">
           <div className="py-2 px-3 bg-gray-100 flex justify-between items-center border-b border-gray-200">
             <h3 className="text-sm font-semibold text-gray-700">Notifications</h3>
             {unreadCount > 0 && (

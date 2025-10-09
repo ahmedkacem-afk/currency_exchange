@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
-import Layout from '../components/Layout';
 import { Card } from '../components/Card';
 import Button from '../components/Button';
 import { useToast } from '../components/Toast';
 import RoleSelector from '../components/RoleSelector';
 import { getAllRoles, getUserRole } from '../lib/api';
 import { supabase } from '../lib/supabase';
+import { useI18n } from '../i18n/I18nProvider';
 
 /**
  * UserManagement Component
@@ -17,6 +17,7 @@ export default function UserManagement() {
   const [loading, setLoading] = useState(true);
   const [roles, setRoles] = useState([]);
   const { show } = useToast();
+  const { t } = useI18n();
 
   // Load users and roles
   useEffect(() => {
@@ -28,40 +29,50 @@ export default function UserManagement() {
         const rolesData = await getAllRoles();
         setRoles(rolesData || []);
         
-        // Load users from users table
+        // Load users from users table with joined role data
         const { data: usersData, error } = await supabase
           .from('users')
-          .select('*')
+          .select('*, role:role_id(*)')
           .order('created_at', { ascending: false });
           
         if (error) throw error;
         
-        // For each user, get their role
-        const usersWithRoles = await Promise.all(
-          (usersData || []).map(async (user) => {
-            try {
-              const role = await getUserRole(user.id);
+        // Process users to ensure consistent role format
+        const usersWithRoles = (usersData || []).map(user => {
+          // Handle case where user has direct role property
+          if (user.role && typeof user.role === 'string') {
+            return {
+              ...user,
+              role: {
+                id: null,
+                name: user.role
+              }
+            };
+          }
+          
+          // Handle case where role is from joined table but might be null
+          if (!user.role && user.role_id) {
+            // We have role_id but no joined role data, look for it in roles list
+            const matchingRole = roles.find(r => r.id === user.role_id);
+            if (matchingRole) {
               return {
                 ...user,
-                role
-              };
-            } catch (err) {
-              console.error(`Error getting role for user ${user.id}:`, err);
-              return {
-                ...user,
-                role: null
+                role: matchingRole
               };
             }
-          })
-        );
+          }
+          
+          // Return user as is if already has proper role structure or no role
+          return user;
+        });
         
         setUsers(usersWithRoles);
       } catch (error) {
         console.error('Error loading users:', error);
         show({
           type: 'error',
-          title: 'Failed to Load',
-          message: 'Could not load users. ' + error.message
+          title: t('userManagement.failedToLoad'),
+          message: t('userManagement.couldNotLoadUsers') + ': ' + error.message
         });
       } finally {
         setLoading(false);
@@ -74,6 +85,17 @@ export default function UserManagement() {
   // Handle role change for a user
   const handleRoleChange = async (userId, roleId) => {
     try {
+      // First, update the role in the database
+      const { data, error } = await supabase
+        .from('users')
+        .update({ role_id: roleId })
+        .eq('id', userId);
+      
+      if (error) throw error;
+      
+      // Get the role object for the selected role ID
+      const selectedRole = roles.find(r => r.id === roleId);
+      
       // Update the user's role in the state
       setUsers(prevUsers => 
         prevUsers.map(user => 
@@ -81,7 +103,7 @@ export default function UserManagement() {
             ? { 
                 ...user, 
                 role_id: roleId,
-                role: roles.find(r => r.id === roleId) || null
+                role: selectedRole || null
               } 
             : user
         )
@@ -90,41 +112,40 @@ export default function UserManagement() {
       // Show success message
       show({
         type: 'success',
-        title: 'Role Updated',
-        message: 'User role has been updated successfully'
+        title: t('userManagement.roleUpdated'),
+        message: t('userManagement.roleUpdateSuccess')
       });
     } catch (error) {
       console.error('Error updating role:', error);
       show({
         type: 'error',
-        title: 'Failed to Update Role',
+        title: t('userManagement.roleUpdateFailed'),
         message: error.message
       });
     }
   };
 
   return (
-    <Layout>
       <div className="max-w-6xl mx-auto px-4 py-6">
-        <h1 className="text-2xl font-bold mb-6">User Management</h1>
+        <h1 className="text-2xl font-bold mb-6">{t('userManagement.title')}</h1>
         
         <Card>
           <div className="p-6">
-            <h2 className="text-xl font-semibold mb-4">Users</h2>
+            <h2 className="text-xl font-semibold mb-4">{t('userManagement.users')}</h2>
             
             {loading ? (
-              <div className="text-gray-500">Loading users...</div>
+              <div className="text-gray-500">{t('userManagement.loadingUsers')}</div>
             ) : users.length === 0 ? (
-              <div className="text-gray-500">No users found</div>
+              <div className="text-gray-500">{t('userManagement.noUsersFound')}</div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="min-w-full bg-white">
                   <thead>
                     <tr>
-                      <th className="py-2 px-4 border-b text-left">Email</th>
-                      <th className="py-2 px-4 border-b text-left">Name</th>
-                      <th className="py-2 px-4 border-b text-left">Current Role</th>
-                      <th className="py-2 px-4 border-b text-left">Assign Role</th>
+                      <th className="py-2 px-4 border-b text-left">{t('userManagement.email')}</th>
+                      <th className="py-2 px-4 border-b text-left">{t('userManagement.name')}</th>
+                      <th className="py-2 px-4 border-b text-left">{t('userManagement.currentRole')}</th>
+                      <th className="py-2 px-4 border-b text-left">{t('userManagement.assignRole')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -137,18 +158,26 @@ export default function UserManagement() {
                           {user.first_name} {user.last_name}
                         </td>
                         <td className="py-2 px-4 border-b">
-                          {user.role?.name ? (
+                          {user.role?.name || user.role || (user.role_id ? `Role ID: ${user.role_id}` : null) ? (
                             <span className="inline-block px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium">
-                              {user.role.name.charAt(0).toUpperCase() + user.role.name.slice(1)}
+                              {/* Handle different possible formats of role data */}
+                              {typeof user.role === 'string' 
+                                ? user.role.charAt(0).toUpperCase() + user.role.slice(1)
+                                : user.role?.name 
+                                  ? user.role.name.charAt(0).toUpperCase() + user.role.name.slice(1)
+                                  : user.role_id 
+                                    ? `Role ID: ${user.role_id}`
+                                    : 'Unknown'
+                              }
                             </span>
                           ) : (
-                            <span className="text-gray-500">No role assigned</span>
+                            <span className="text-gray-500">{t('userManagement.noRoleAssigned')}</span>
                           )}
                         </td>
                         <td className="py-2 px-4 border-b">
                           <RoleSelector
                             userId={user.id}
-                            currentRoleId={user.role_id}
+                            currentRoleId={user.role_id || (typeof user.role === 'object' ? user.role?.id : null)}
                             onRoleChange={(roleId) => handleRoleChange(user.id, roleId)}
                           />
                         </td>
@@ -161,6 +190,5 @@ export default function UserManagement() {
           </div>
         </Card>
       </div>
-    </Layout>
   );
 }

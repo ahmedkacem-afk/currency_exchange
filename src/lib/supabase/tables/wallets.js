@@ -40,10 +40,14 @@ export async function getWallets() {
     
     console.log('Wallets API: Found', wallets.length, 'wallets');
     
-    // Get custody records
+    // Get custody records with joined user data
     const { data: custodyRecords, error: custodyError } = await supabase
       .from('cash_custody')
-      .select('*')
+      .select(`
+        *,
+        cashier:cashier_id(id, name, email),
+        treasurer:treasurer_id(id, name, email)
+      `)
       .eq('status', 'active');
       
     if (custodyError) {

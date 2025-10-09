@@ -482,15 +482,24 @@ export async function subscribeToNotifications(callback) {
     return null;
   }
   
-  return supabase
-    .from(`notifications:user_id=eq.${user.id}`)
-    .on('INSERT', payload => {
-      console.log('New notification received:', payload);
-      callback(payload);
-    })
-    .on('UPDATE', payload => {
-      console.log('Notification updated:', payload);
-      callback(payload);
-    })
+  // Use the .channel() method for Supabase realtime subscriptions
+  const channel = supabase
+    .channel(`public:notifications:user_id=eq.${user.id}`)
+    .on('postgres_changes', 
+      { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` },
+      payload => {
+        console.log('New notification received:', payload);
+        callback(payload.new);
+      }
+    )
+    .on('postgres_changes',
+      { event: 'UPDATE', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` },
+      payload => {
+        console.log('Notification updated:', payload);
+        callback(payload.new);
+      }
+    )
     .subscribe();
+    
+  return channel;
 }

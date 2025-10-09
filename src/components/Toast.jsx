@@ -5,8 +5,29 @@ const ToastContext = createContext(null)
 export function ToastProvider({ children }) {
   const [toasts, setToasts] = useState([])
 
-  function show(message, type = 'success', durationMs = 2500) {
+  function show(messageOrConfig, typeArg = 'success', durationMs = 2500) {
     const id = Math.random().toString(36).slice(2)
+    
+    // Support both formats:
+    // 1. show(message, type, duration)
+    // 2. show({type, title, message})
+    let message, type;
+    
+    if (typeof messageOrConfig === 'object' && messageOrConfig !== null) {
+      // Object format with {type, title, message}
+      const config = messageOrConfig;
+      message = config.message;
+      type = config.type || 'success';
+      // Optionally include the title if provided
+      if (config.title) {
+        message = `${config.title}: ${message}`;
+      }
+    } else {
+      // Original format with separate parameters
+      message = messageOrConfig;
+      type = typeArg;
+    }
+    
     setToasts(prev => [...prev, { id, message, type }])
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), durationMs)
   }

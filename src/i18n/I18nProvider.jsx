@@ -18,6 +18,128 @@ const strings = {
       account: 'Account',
       menu: 'Menu'
     },
+    // Flattened keys for convenience
+    'userManagement.title': 'User Management',
+    'userManagement.users': 'Users',
+    'userManagement.email': 'Email',
+    'userManagement.name': 'Name',
+    'userManagement.currentRole': 'Current Role',
+    'userManagement.assignRole': 'Assign Role',
+    'userManagement.loadingUsers': 'Loading users...',
+    'userManagement.noUsersFound': 'No users found',
+    'userManagement.noRoleAssigned': 'No role assigned',
+    'userManagement.roleUpdated': 'Role updated successfully',
+    'userManagement.failedToLoad': 'Failed to load',
+    'userManagement.couldNotLoadUsers': 'Could not load users',
+    'userManagement.roleUpdateFailed': 'Failed to update role',
+    'userManagement.roleUpdateSuccess': 'User role has been updated successfully',
+
+    'roles.manager': 'Manager',
+    'roles.treasurer': 'Treasurer',
+    'roles.cashier': 'Cashier',
+    'roles.dealings_executioner': 'Dealings Executioner',
+    'roles.selectRole': 'Select a role',
+    'roles.loadingRoles': 'Loading roles...',
+    'roles.noRolesAvailable': 'No roles available',
+    'roles.solution': 'Solution',
+    'roles.runFixRoles': 'Run npm run fix:roles to fix.',
+    'roles.noRolesInDatabase': 'No roles found in the database.',
+    'roles.runFixRolesToCreate': 'Run npm run fix:roles to create the roles table.',
+
+    'create.role': 'Role',
+    'create.title': 'Create Entities',
+    'create.wallet': 'Create Wallet',
+    'create.name': 'Name',
+    'create.initUsd': 'Initial USD',
+    'create.initLyd': 'Initial LYD',
+    'create.create': 'Create',
+    'create.user': 'Create User',
+    'create.email': 'Email',
+    'create.phone': 'Phone',
+    'create.password': 'Password',
+    'create.operation': 'Create Operation',
+    'create.operationName': 'Operation Name',
+    'create.currencyType': 'Create Currency Type',
+    'create.currencyCode': 'Currency Code',
+    'create.currencyName': 'Currency Name',
+    'create.currencySymbol': 'Currency Symbol (Optional)',
+    'create.addCurrency': 'Add Currency',
+    'create.initialBalance': 'Initial Balance',
+    
+    'custodyManagement.title': 'Cash Custody Management',
+    'custodyManagement.refresh': 'Refresh',
+    'custodyManagement.custodyGiven': 'Custody Given',
+    'custodyManagement.noCustodyGiven': 'No custody given',
+    'custodyManagement.custodyReceived': 'Custody Received',
+    'custodyManagement.noCustodyReceived': 'No custody received',
+    'custodyManagement.date': 'Date',
+    'custodyManagement.cashier': 'Cashier',
+    'custodyManagement.treasurer': 'Treasurer',
+    'custodyManagement.wallet': 'Wallet',
+    'custodyManagement.amount': 'Amount',
+    'custodyManagement.status': 'Status',
+    'custodyManagement.actions': 'Actions',
+    'custodyManagement.pending': 'Pending',
+    'custodyManagement.approved': 'Approved',
+    'custodyManagement.rejected': 'Rejected',
+    'custodyManagement.returned': 'Returned',
+    'custodyManagement.approve': 'Approve',
+    'custodyManagement.reject': 'Reject',
+    'custodyManagement.markReturned': 'Mark Returned',
+    'custodyManagement.approvalSuccess': 'Custody request approved successfully',
+    'custodyManagement.rejectionSuccess': 'Custody request rejected',
+    'custodyManagement.returnSuccess': 'Custody marked as returned',
+    'custodyManagement.approvalFailed': 'Approval failed',
+    'custodyManagement.rejectionFailed': 'Rejection failed',
+    'custodyManagement.returnFailed': 'Failed to mark custody as returned',
+    
+    // Dashboard flattened keys
+    'dashboard.title': 'Dashboard',
+    'dashboard.totals': 'Totals',
+    'dashboard.totalUsd': 'Total USD',
+    'dashboard.totalLyd': 'Total LYD',
+    'dashboard.numWallets': 'Wallets',
+    'dashboard.selectWallet': 'Select Wallet',
+    'dashboard.walletBalances': 'Wallet Balances',
+    'dashboard.usd': 'USD',
+    'dashboard.lyd': 'LYD',
+    'dashboard.buyInfo': 'Buying Dinar',
+    'dashboard.sellInfo': 'Selling Dinar',
+    'dashboard.lowest': 'Lowest',
+    'dashboard.median': 'Median',
+    'dashboard.highest': 'Highest',
+    'dashboard.managerPrices': 'Manager Prices',
+    'dashboard.sellold': 'Selling old dinar',
+    'dashboard.sellnew': 'Selling new dinar',
+    'dashboard.buyold': 'Buying old dinar',
+    'dashboard.buynew': 'Buying new dinar',
+    'dashboard.save': 'Save Prices',
+    'dashboard.custodySummary': 'Custody Summary',
+    'dashboard.summaryTotals': 'Summary Totals',
+    
+    // Treasurer flattened keys
+    'treasurer.title': 'Cash Custody Management',
+    'treasurer.subtitle': 'Manage cash custody between treasurer and cashiers',
+    'treasurer.giveCustody': 'Give Custody to Cashier',
+    'treasurer.getCustody': 'Get Custody from Cashier',
+    'treasurer.selectCashier': 'Select Cashier',
+    'treasurer.cashierName': 'Cashier Name',
+    'treasurer.currencyType': 'Currency Type',
+    'treasurer.amount': 'Amount',
+    'treasurer.selectAction': 'Select Action',
+    'treasurer.actionRequired': 'Please select an action first',
+    'treasurer.cashierRequired': 'Please select a cashier',
+    'treasurer.currencyRequired': 'Please select a currency',
+    'treasurer.amountRequired': 'Please enter an amount',
+    'treasurer.amountInvalid': 'Please enter a valid amount',
+    'treasurer.confirmCustody': 'Confirm Custody Transfer',
+    'treasurer.successGive': 'Cash custody successfully given to cashier',
+    'treasurer.successGet': 'Cash custody successfully received from cashier',
+    'treasurer.notes': 'Notes (Optional)',
+    'treasurer.processingCustody': 'Processing custody transfer...',
+    'treasurer.insufficientFunds': 'Insufficient funds for this operation',
+    'treasurer.selectCurrency': 'Select Currency',
+    'treasurer.custodyHistory': 'Custody History',
     login: { title: 'Manager Login', email: 'Email', password: 'Password', submit: 'Login' },
     dashboard: {
       totals: 'Totals', totalUsd: 'Total USD', totalLyd: 'Total LYD', numWallets: 'Wallets',
@@ -255,11 +377,135 @@ const strings = {
       executioner: 'منفذ الصفقات',
       debtManagement: 'إدارة الديون',
       treasurer: 'إدارة العهد النقدية',
+      cashCustody: 'العهد النقدية',
+      userManagement: 'إدارة المستخدمين',
       changePassword: 'تغيير كلمة المرور',
       logout: 'تسجيل الخروج',
       account: 'الحساب',
       menu: 'القائمة'
     },
+    // Flattened keys for Arabic
+    'userManagement.title': 'إدارة المستخدمين',
+    'userManagement.users': 'المستخدمون',
+    'userManagement.email': 'البريد الإلكتروني',
+    'userManagement.name': 'الاسم',
+    'userManagement.currentRole': 'الدور الحالي',
+    'userManagement.assignRole': 'تعيين دور',
+    'userManagement.loadingUsers': 'جارٍ تحميل المستخدمين...',
+    'userManagement.noUsersFound': 'لم يتم العثور على مستخدمين',
+    'userManagement.noRoleAssigned': 'لم يتم تعيين دور',
+    'userManagement.roleUpdated': 'تم تحديث دور المستخدم بنجاح',
+    'userManagement.failedToLoad': 'فشل التحميل',
+    'userManagement.couldNotLoadUsers': 'تعذر تحميل المستخدمين',
+    'userManagement.roleUpdateFailed': 'فشل تحديث الدور',
+    'userManagement.roleUpdateSuccess': 'تم تحديث دور المستخدم بنجاح',
+
+    'roles.manager': 'مدير',
+    'roles.treasurer': 'أمين صندوق',
+    'roles.cashier': 'صراف',
+    'roles.dealings_executioner': 'منفذ صفقات',
+    'roles.selectRole': 'اختر دوراً',
+    'roles.loadingRoles': 'جارٍ تحميل الأدوار...',
+    'roles.noRolesAvailable': 'لا توجد أدوار متاحة',
+    'roles.solution': 'الحل',
+    'roles.runFixRoles': 'قم بتشغيل npm run fix:roles للإصلاح.',
+    'roles.noRolesInDatabase': 'لم يتم العثور على أدوار في قاعدة البيانات.',
+    'roles.runFixRolesToCreate': 'قم بتشغيل npm run fix:roles لإنشاء جدول الأدوار.',
+
+    'create.role': 'الدور',
+    'create.title': 'إنشاء الكيانات',
+    'create.wallet': 'إنشاء محفظة',
+    'create.name': 'الاسم',
+    'create.initUsd': 'الدولار الابتدائي',
+    'create.initLyd': 'الدينار الابتدائي',
+    'create.create': 'إنشاء',
+    'create.user': 'إنشاء مستخدم',
+    'create.email': 'البريد الإلكتروني',
+    'create.phone': 'الهاتف',
+    'create.password': 'كلمة المرور',
+    'create.operation': 'إنشاء نوع معاملات',
+    'create.operationName': 'اسم المعاملة',
+    'create.currencyType': 'إنشاء نوع عملة',
+    'create.currencyCode': 'رمز العملة',
+    'create.currencyName': 'اسم العملة',
+    'create.currencySymbol': 'رمز العملة (اختياري)',
+    'create.addCurrency': 'إضافة عملة',
+    'create.initialBalance': 'الرصيد الأولي',
+    
+    'custodyManagement.title': 'إدارة العهد النقدية',
+    'custodyManagement.refresh': 'تحديث',
+    'custodyManagement.custodyGiven': 'العهد المعطاة',
+    'custodyManagement.noCustodyGiven': 'لا توجد عهدات معطاة',
+    'custodyManagement.custodyReceived': 'العهد المستلمة',
+    'custodyManagement.noCustodyReceived': 'لا توجد عهدات مستلمة',
+    'custodyManagement.date': 'التاريخ',
+    'custodyManagement.cashier': 'الصراف',
+    'custodyManagement.treasurer': 'أمين الصندوق',
+    'custodyManagement.wallet': 'المحفظة',
+    'custodyManagement.amount': 'المبلغ',
+    'custodyManagement.status': 'الحالة',
+    'custodyManagement.actions': 'الإجراءات',
+    'custodyManagement.pending': 'قيد الانتظار',
+    'custodyManagement.approved': 'تمت الموافقة',
+    'custodyManagement.rejected': 'مرفوض',
+    'custodyManagement.returned': 'معاد',
+    'custodyManagement.approve': 'موافقة',
+    'custodyManagement.reject': 'رفض',
+    'custodyManagement.markReturned': 'تحديد كمعاد',
+    'custodyManagement.approvalSuccess': 'تمت الموافقة على طلب العهدة بنجاح',
+    'custodyManagement.rejectionSuccess': 'تم رفض طلب العهدة',
+    'custodyManagement.returnSuccess': 'تم تحديد العهدة كمعادة',
+    'custodyManagement.approvalFailed': 'فشلت الموافقة',
+    'custodyManagement.rejectionFailed': 'فشل الرفض',
+    'custodyManagement.returnFailed': 'فشل تحديد العهدة كمعادة',
+    
+    // Dashboard flattened keys - Arabic
+    'dashboard.title': 'لوحة المدير',
+    'dashboard.totals': 'الإجماليات',
+    'dashboard.totalUsd': 'إجمالي الدولار',
+    'dashboard.totalLyd': 'إجمالي الدينار',
+    'dashboard.numWallets': 'عدد المحافظ',
+    'dashboard.selectWallet': 'اختر المحفظة',
+    'dashboard.walletBalances': 'أرصدة المحفظة',
+    'dashboard.usd': 'دولار',
+    'dashboard.lyd': 'دينار',
+    'dashboard.buyInfo': 'معلومات شراء الدينار',
+    'dashboard.sellInfo': 'معلومات بيع الدينار',
+    'dashboard.lowest': 'الأدنى',
+    'dashboard.median': 'الوسطي',
+    'dashboard.highest': 'الأعلى',
+    'dashboard.managerPrices': 'أسعار المدير',
+    'dashboard.sellold': 'بيع الدينار القديم',
+    'dashboard.sellnew': 'بيع الدينار الجديد',
+    'dashboard.buyold': 'شراء الدينار القديم',
+    'dashboard.buynew': 'شراء الدينار الجديد',
+    'dashboard.save': 'حفظ الأسعار',
+    'dashboard.custodySummary': 'ملخص العهدات',
+    'dashboard.summaryTotals': 'مجاميع الملخص',
+    
+    // Treasurer flattened keys - Arabic
+    'treasurer.title': 'إدارة العهد النقدية',
+    'treasurer.subtitle': 'إدارة العهد النقدية بين أمين الصندوق والصرافين',
+    'treasurer.giveCustody': 'إعطاء عهدة للصراف',
+    'treasurer.getCustody': 'استلام عهدة من الصراف',
+    'treasurer.selectCashier': 'اختر الصراف',
+    'treasurer.cashierName': 'اسم الصراف',
+    'treasurer.currencyType': 'نوع العملة',
+    'treasurer.amount': 'المبلغ',
+    'treasurer.selectAction': 'اختر الإجراء',
+    'treasurer.actionRequired': 'الرجاء اختيار الإجراء أولاً',
+    'treasurer.cashierRequired': 'الرجاء اختيار صراف',
+    'treasurer.currencyRequired': 'الرجاء اختيار عملة',
+    'treasurer.amountRequired': 'الرجاء إدخال المبلغ',
+    'treasurer.amountInvalid': 'الرجاء إدخال مبلغ صحيح',
+    'treasurer.confirmCustody': 'تأكيد تحويل العهدة',
+    'treasurer.successGive': 'تم إعطاء العهدة النقدية للصراف بنجاح',
+    'treasurer.successGet': 'تم استلام العهدة النقدية من الصراف بنجاح',
+    'treasurer.notes': 'ملاحظات (اختياري)',
+    'treasurer.processingCustody': 'جارٍ معالجة تحويل العهدة...',
+    'treasurer.insufficientFunds': 'رصيد غير كافٍ لهذه العملية',
+    'treasurer.selectCurrency': 'اختر العملة',
+    'treasurer.custodyHistory': 'سجل العهدات',
     login: { title: 'تسجيل دخول المدير', email: 'البريد الإلكتروني', password: 'كلمة المرور', submit: 'دخول' },
     dashboard: {
       totals: 'الإجماليات', totalUsd: 'إجمالي الدولار', totalLyd: 'إجمالي الدينار', numWallets: 'عدد المحافظ',
@@ -295,7 +541,20 @@ const strings = {
     common: {
       cancel: 'إلغاء',
       back: 'رجوع',
-      close: 'إغلاق'
+      close: 'إغلاق',
+      save: 'حفظ',
+      saving: 'جاري الحفظ...',
+      delete: 'حذف',
+      deleted: 'تم الحذف بنجاح',
+      paid: 'تحديد كمدفوع',
+      loading: 'جاري التحميل...',
+      notes: 'ملاحظات',
+      selectOption: 'اختر خياراً',
+      failedToLoadData: 'فشل في تحميل البيانات',
+      failedToSave: 'فشل في الحفظ',
+      availableBalance: 'الرصيد المتاح',
+      fillRequiredFields: 'الرجاء ملء جميع الحقول المطلوبة',
+      failed: 'فشلت العملية'
     },
     executioner: {
       title: 'منفذ الصفقات',
@@ -393,7 +652,71 @@ const strings = {
       notes: 'ملاحظات (اختياري)',
       processingCustody: 'جارٍ معالجة تحويل العهدة...',
       insufficientFunds: 'رصيد غير كافٍ لهذه العملية',
-      selectCurrency: 'اختر العملة'
+      selectCurrency: 'اختر العملة',
+      custodyHistory: 'سجل العهدات',
+      wallet: 'المحفظة',
+      availableBalance: 'الرصيد المتاح'
+    },
+    
+    custodyManagement: {
+      title: 'إدارة العهد النقدية',
+      refresh: 'تحديث',
+      custodyGiven: 'العهد المعطاة',
+      noCustodyGiven: 'لا توجد عهدات معطاة',
+      custodyReceived: 'العهد المستلمة',
+      noCustodyReceived: 'لا توجد عهدات مستلمة',
+      date: 'التاريخ',
+      cashier: 'الصراف',
+      treasurer: 'أمين الصندوق',
+      wallet: 'المحفظة',
+      amount: 'المبلغ',
+      status: 'الحالة',
+      actions: 'الإجراءات',
+      pending: 'قيد الانتظار',
+      approved: 'تمت الموافقة',
+      rejected: 'مرفوض',
+      returned: 'معاد',
+      approve: 'موافقة',
+      reject: 'رفض',
+      markReturned: 'تحديد كمعاد',
+      approvalSuccess: 'تمت الموافقة على طلب العهدة بنجاح',
+      rejectionSuccess: 'تم رفض طلب العهدة',
+      returnSuccess: 'تم تحديد العهدة كمعادة',
+      approvalFailed: 'فشلت الموافقة',
+      rejectionFailed: 'فشل الرفض',
+      returnFailed: 'فشل تحديد العهدة كمعادة',
+      cancel: 'إلغاء',
+      giveCustody: 'إعطاء العهدة',
+      processing: 'جارٍ المعالجة...'
+    },
+    
+    roles: {
+      manager: 'مدير',
+      treasurer: 'أمين صندوق',
+      cashier: 'صراف',
+      dealings_executioner: 'منفذ صفقات',
+      role: 'الدور',
+      selectRole: 'اختر دوراً',
+      loadingRoles: 'جارٍ تحميل الأدوار...',
+      noRolesAvailable: 'لا توجد أدوار متاحة',
+      refreshRoles: 'تحديث',
+      roleError: 'لم يتم العثور على أدوار في قاعدة البيانات. تأكد من وجود جدول الأدوار وملئه بالبيانات.',
+      noRolesFound: 'لم يتم العثور على أدوار في قاعدة البيانات.'
+    },
+    
+    userManagement: {
+      title: 'إدارة المستخدمين',
+      users: 'المستخدمون',
+      loadingUsers: 'جارٍ تحميل المستخدمين...',
+      noUsers: 'لا يوجد مستخدمون',
+      email: 'البريد الإلكتروني',
+      name: 'الاسم',
+      currentRole: 'الدور الحالي',
+      assignRole: 'تعيين دور',
+      noRoleAssigned: 'لم يتم تعيين دور',
+      roleUpdated: 'تم تحديث دور المستخدم بنجاح',
+      failedToUpdateRole: 'فشل تحديث الدور',
+      unknown: 'غير معروف'
     },
     
     cashier: {
@@ -479,7 +802,43 @@ export function I18nProvider({ children }) {
     try { localStorage.setItem('lang', next) } catch {}
     return next
   })
-  const t = (key) => key.split('.').reduce((o, k) => (o ? o[k] : key), strings[lang])
+  
+  // Translation function that properly handles nested object access
+  const t = (key) => {
+    // If key is not a string, return the key itself
+    if (typeof key !== 'string') return key;
+    
+    try {
+      // First try direct access to see if the key exists as a flattened key
+      if (strings[lang] && strings[lang][key] !== undefined) {
+        return strings[lang][key];
+      }
+      
+      // If not found directly, try to traverse the nested structure
+      if (key.includes('.')) {
+        const parts = key.split('.');
+        let current = strings[lang];
+        
+        for (const part of parts) {
+          if (current && current[part] !== undefined) {
+            current = current[part];
+          } else {
+            // Key path not found in translations
+            console.warn(`Translation key not found: ${key}`);
+            return key; // Return key as fallback
+          }
+        }
+        return current;
+      }
+      
+      // Key not found
+      console.warn(`Translation key not found: ${key}`);
+      return key;
+    } catch (error) {
+      console.error(`Error in translation function for key: ${key}`, error);
+      return key; // Fallback to key on error
+    }
+  }
   
   const value = useMemo(() => ({ lang, setLang, toggleLang, dir, t }), [lang, dir])
   
