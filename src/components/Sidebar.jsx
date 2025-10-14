@@ -193,6 +193,18 @@ export function Sidebar({ isOpen, setIsOpen, profile, dir }) {
                   </div>
                 )}
               </NavLink>
+              <NavLink onClick={() => setIsOpen(false)} to="/wallet-management">
+                {({ isActive }) => (
+                  <div className={`px-4 py-3 rounded-lg flex items-center transition-colors ${isActive ? 'bg-emerald-600 text-white shadow-sm' : 'text-emerald-900 hover:bg-emerald-50'}`}>
+                    <svg className={`w-5 h-5 mr-2.5 ${isActive ? 'text-emerald-100' : 'text-emerald-500'}`} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M2 6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6z"></path>
+                      <path d="M16 10H8"></path>
+                      <path d="M12 14v-8"></path>
+                    </svg>
+                    <span>{t('nav.walletManagement')}</span>
+                  </div>
+                )}
+              </NavLink>
             </nav>
           </div>
           

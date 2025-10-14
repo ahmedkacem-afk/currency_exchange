@@ -15,6 +15,7 @@ import TreasurerPage from './pages/TreasurerPage.jsx'
 import CustodyManagement from './pages/CustodyManagement.jsx'
 import GiveCustody from './pages/GiveCustody.jsx'
 import UserManagement from './pages/UserManagement.jsx'
+import WalletManagementPage from './pages/WalletManagementPage.jsx'
 import { I18nProvider } from './i18n/I18nProvider.jsx'
 import { ToastProvider } from './components/Toast.jsx'
 import { AuthProvider, useAuth } from './lib/AuthContext.jsx'
@@ -78,6 +79,7 @@ function AppRoutes() {
         <Route element={<ProtectedRoute requiredRoles={["manager"]} />}>
           <Route path="/create" element={<CreateEntitiesPage />} />
           <Route path="/user-management" element={<UserManagement />} />
+          <Route path="/wallet-management" element={<WalletManagementPage />} />
         </Route>
         
         {/* Cashier routes - accessible by manager and cashier roles */}

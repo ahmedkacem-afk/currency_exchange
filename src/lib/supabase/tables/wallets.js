@@ -40,15 +40,79 @@ export async function getWallets() {
     
     console.log('Wallets API: Found', wallets.length, 'wallets');
     
-    // Get custody records with joined user data
+    // Get custody records without status filtering
+    // Note: The foreign key constraint is to auth.users, not public.users
     const { data: custodyRecords, error: custodyError } = await supabase
       .from('cash_custody')
-      .select(`
-        *,
-        cashier:cashier_id(id, name, email),
-        treasurer:treasurer_id(id, name, email)
-      `)
-      .eq('status', 'active');
+      .select('id, treasurer_id, cashier_id, wallet_id, currency_code, amount, notes, status, is_returned, created_at, updated_at');
+      
+    if (custodyError) {
+      console.log('Wallets API: Error fetching custody records:', custodyError);
+    } else {
+      console.log('Wallets API: Found custody records:', custodyRecords?.length || 0);
+      
+      // Display structure of first record if available for debugging
+      if (custodyRecords && custodyRecords.length > 0) {
+        console.log('Sample custody record:', custodyRecords[0]);
+      }
+    }
+    
+    // Get the list of cashier and treasurer IDs
+    const userIds = new Set();
+    if (custodyRecords) {
+      custodyRecords.forEach(record => {
+        if (record.cashier_id) userIds.add(record.cashier_id);
+        if (record.treasurer_id) userIds.add(record.treasurer_id);
+      });
+    }
+      
+    // Get user data separately to avoid foreign key issues
+    let cashiersData = {};
+    
+    // If we found user IDs, fetch their information from the public.users table
+    if (userIds && userIds.size > 0) {
+      const { data: users, error: usersError } = await supabase
+        .from('users')
+        .select('id, name, email')
+        .in('id', Array.from(userIds));
+        
+      if (usersError) {
+        console.log('Wallets API: Error fetching user data for custody records:', usersError);
+      } else if (users) {
+        users.forEach(user => {
+          cashiersData[user.id] = user;
+        });
+      }
+    }
+    let treasurersData = {};
+    
+    if (!custodyError && custodyRecords && custodyRecords.length > 0) {
+      // Get unique user IDs
+      const userIds = [
+        ...new Set([
+          ...custodyRecords.map(record => record.cashier_id),
+          ...custodyRecords.map(record => record.treasurer_id)
+        ])
+      ].filter(Boolean);
+      
+      // Fetch user data
+      if (userIds.length > 0) {
+        const { data: userData } = await supabase
+          .from('users')
+          .select('id, name, email')
+          .in('id', userIds);
+          
+        if (userData) {
+          // Create lookup maps
+          userData.forEach(user => {
+            if (user && user.id) {
+              cashiersData[user.id] = user;
+              treasurersData[user.id] = user;
+            }
+          });
+        }
+      }
+    }
       
     if (custodyError) {
       console.warn('Wallets API: Error fetching custody records:', custodyError);
@@ -56,10 +120,19 @@ export async function getWallets() {
     
     // Calculate custody totals for all wallets
     // Process custody records to get summary
-    const activeCustodyRecords = custodyRecords?.filter(record => record.status === 'active') || [];
+    const activeCustodyRecords = custodyRecords || [];
+    
+    // Add user data to custody records
+    const enhancedCustodyRecords = activeCustodyRecords.map(record => {
+      return {
+        ...record,
+        cashier: record.cashier_id ? cashiersData[record.cashier_id] : null,
+        treasurer: record.treasurer_id ? treasurersData[record.treasurer_id] : null
+      };
+    });
     
     // Get custody totals for all wallets
-    const custodyTotals = calculateCustodyTotalsByWallet(activeCustodyRecords, wallets);
+    const custodyTotals = calculateCustodyTotalsByWallet(enhancedCustodyRecords, wallets);
     
     // Initialize all wallets with their legacy currencies
     let walletsWithCurrencies = wallets.map(wallet => {
@@ -347,16 +420,54 @@ export async function getWalletStats(walletId) {
       median: sellPrices[Math.floor(sellPrices.length / 2)] || sellPrices[0]
     } : null
     
-    // Get custody records for this wallet
+    // Get custody records for this wallet with explicit column selection
     const { data: custodyRecords, error: custodyError } = await supabase
       .from('cash_custody')
-      .select('*')
+      .select('id, treasurer_id, cashier_id, wallet_id, currency_code, amount, notes, status, is_returned, created_at, updated_at')
       .eq('wallet_id', walletId)
       .order('created_at', { ascending: false });
       
     if (custodyError) {
       console.warn('Wallets API: Error fetching custody records:', custodyError);
+    } else {
+      console.log(`Wallets API: Found ${custodyRecords?.length || 0} custody records for wallet ${walletId}`);
+      
+      // Log the first record for debugging if exists
+      if (custodyRecords && custodyRecords.length > 0) {
+        console.log('First custody record sample:', custodyRecords[0]);
+      }
     }
+    
+    // Get user data for cashiers and treasurers in these custody records
+    const custodyUserIds = new Set();
+    if (custodyRecords && custodyRecords.length > 0) {
+      custodyRecords.forEach(record => {
+        if (record.cashier_id) custodyUserIds.add(record.cashier_id);
+        if (record.treasurer_id) custodyUserIds.add(record.treasurer_id);
+      });
+    }
+    
+    // Fetch the user data separately
+    const custodyUsers = {};
+    if (custodyUserIds.size > 0) {
+      const { data: users, error: usersError } = await supabase
+        .from('users')
+        .select('id, name, email')
+        .in('id', Array.from(custodyUserIds));
+        
+      if (!usersError && users) {
+        users.forEach(user => {
+          custodyUsers[user.id] = user;
+        });
+      }
+    }
+    
+    // Enhance custody records with user data
+    const enhancedCustodyRecords = custodyRecords ? custodyRecords.map(record => ({
+      ...record,
+      treasurer: custodyUsers[record.treasurer_id] || { id: record.treasurer_id, name: `Treasurer (${record.treasurer_id?.slice(0, 8) || 'Unknown'})` },
+      cashier: custodyUsers[record.cashier_id] || { id: record.cashier_id, name: `Cashier (${record.cashier_id?.slice(0, 8) || 'Unknown'})` }
+    })) : [];
     
     // Add custody information to the wallet object
     wallet.isTreasury = !!wallet.is_treasury;
@@ -367,7 +478,7 @@ export async function getWalletStats(walletId) {
       transactions,
       buy,
       sell,
-      custodyRecords: custodyRecords || [],
+      custodyRecords: enhancedCustodyRecords || [],
       custodyBalances: walletCustodyBalances
     }
   } catch (error) {

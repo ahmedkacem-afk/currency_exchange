@@ -44,6 +44,16 @@ export async function getAllCashCustody() {
         console.warn('Error fetching given custody records:', givenResponse.error);
       } else {
         givenRecords = givenResponse.data || [];
+        console.log(`Cash Custody API: Found ${givenRecords.length} given custody records`);
+        // Debug output for the first record
+        if (givenRecords.length > 0) {
+          console.log('Sample given record:', {
+            id: givenRecords[0].id,
+            treasurer_id: givenRecords[0].treasurer_id,
+            cashier_id: givenRecords[0].cashier_id,
+            status: givenRecords[0].status
+          });
+        }
       }
     } catch (error) {
       console.warn('Exception fetching given custody records:', error);
@@ -61,6 +71,16 @@ export async function getAllCashCustody() {
         console.warn('Error fetching received custody records:', receivedResponse.error);
       } else {
         receivedRecords = receivedResponse.data || [];
+        console.log(`Cash Custody API: Found ${receivedRecords.length} received custody records`);
+        // Debug output for the first record
+        if (receivedRecords.length > 0) {
+          console.log('Sample received record:', {
+            id: receivedRecords[0].id,
+            treasurer_id: receivedRecords[0].treasurer_id,
+            cashier_id: receivedRecords[0].cashier_id,
+            status: receivedRecords[0].status
+          });
+        }
       }
     } catch (error) {
       console.warn('Exception fetching received custody records:', error);
@@ -88,18 +108,38 @@ export async function getAllCashCustody() {
     // Only try to fetch users if we have IDs to fetch
     if (userIds.size > 0) {
       try {
-        // Fetch all relevant users in a single query
+        // Fetch all relevant users in a single query from the users table
+        // This is important because the foreign keys point to auth.users but we need to display user info from public.users
         const { data: users, error: usersError } = await supabase
           .from('users')
           .select('id, name, email')
           .in('id', Array.from(userIds));
           
+        console.log(`Cash Custody API: Attempting to fetch ${userIds.size} users, found ${users?.length || 0}`);
+        
         if (!usersError && users) {
           users.forEach(user => {
             userMap[user.id] = user;
           });
         } else {
           console.warn('Error fetching user data:', usersError);
+          
+          // As a fallback, try fetching each user individually
+          for (const userId of userIds) {
+            try {
+              const { data: user, error: userError } = await supabase
+                .from('users')
+                .select('id, name, email')
+                .eq('id', userId)
+                .single();
+                
+              if (!userError && user) {
+                userMap[userId] = user;
+              }
+            } catch (err) {
+              console.warn(`Could not fetch user ${userId}:`, err);
+            }
+          }
         }
       } catch (error) {
         console.warn('Exception fetching user data:', error);
