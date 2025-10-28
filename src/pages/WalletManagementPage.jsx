@@ -21,13 +21,25 @@ export default function WalletManagementPage() {
   const [currency, setCurrency] = useState('');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [custodies, setCustodies] = useState([]);
+  const [selectedCustody, setSelectedCustody] = useState('');
+  const [custodyAnalysis, setCustodyAnalysis] = useState(null);
   const { t } = useI18n();
   const { show } = useToast();
   const { user } = useAuth();
 
   useEffect(() => {
     loadWallets();
+    loadCustodies();
   }, []);
+
+  useEffect(() => {
+    if (selectedCustody) {
+      fetchCustodyAnalysis(selectedCustody);
+    } else {
+      setCustodyAnalysis(null);
+    }
+  }, [selectedCustody]);
 
   const loadWallets = async () => {
     try {
@@ -47,6 +59,38 @@ export default function WalletManagementPage() {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Load custodies for selection
+  const loadCustodies = async () => {
+    try {
+      const { getAllCashCustody } = await import('../lib/api');
+      const records = await getAllCashCustody();
+      // Flatten given/received arrays if needed
+      let allCustodies = [];
+      if (records) {
+        if (Array.isArray(records)) {
+          allCustodies = records;
+        } else {
+          allCustodies = [...(records.given || []), ...(records.received || [])];
+        }
+      }
+      setCustodies(allCustodies);
+    } catch (error) {
+      console.error('Error loading custodies:', error);
+    }
+  };
+
+  // Fetch currency pairs analysis for selected custody
+  const fetchCustodyAnalysis = async (custodyId) => {
+    try {
+      const { getCustodyCurrencyPairsAnalysis } = await import('../lib/custodyAnalysis');
+      const analysis = await getCustodyCurrencyPairsAnalysis(custodyId);
+      setCustodyAnalysis(analysis);
+    } catch (error) {
+      console.error('Error fetching custody analysis:', error);
+      setCustodyAnalysis(null);
     }
   };
 
@@ -102,7 +146,60 @@ export default function WalletManagementPage() {
   return (
     <div className="max-w-3xl mx-auto px-4 py-8">
       <h1 className="text-2xl font-bold mb-8">{t('walletManagement.title')}</h1>
-      
+
+      {/* Custody selection */}
+      <Card className="mb-8">
+        <div className="p-6">
+          <h2 className="text-xl font-semibold mb-4">{t('walletManagement.selectCustody')}</h2>
+          <select
+            value={selectedCustody}
+            onChange={(e) => setSelectedCustody(e.target.value)}
+            className="w-full border border-gray-300 rounded px-3 py-2 mb-4"
+          >
+            <option value="">{t('common.selectOption')}</option>
+            {custodies.map((custody) => (
+              <option key={custody.id} value={custody.id}>
+                {custody.cashier?.name || custody.treasurer?.name || custody.id} - {custody.status}
+              </option>
+            ))}
+          </select>
+
+          {/* Show custody details */}
+          {selectedCustody && (
+            <div className="mb-4">
+              <div>Cashier: {custodies.find(c => c.id === selectedCustody)?.cashier?.name || 'Unknown'}</div>
+              <div>Status: {custodies.find(c => c.id === selectedCustody)?.status || 'Unknown'}</div>
+              <div>Date: {custodies.find(c => c.id === selectedCustody)?.created_at ? new Date(custodies.find(c => c.id === selectedCustody).created_at).toLocaleDateString() : 'Unknown'}</div>
+            </div>
+          )}
+
+          {/* Show custody currency pairs analysis table */}
+          {selectedCustody && custodyAnalysis && (
+            <div className="overflow-x-auto">
+              <table className="min-w-full bg-white">
+                <thead>
+                  <tr>
+                    <th className="py-2 px-4 border-b text-left">{t('currencyPairsTable.pair')}</th>
+                    <th className="py-2 px-4 border-b text-right">{t('currencyPairsTable.medianRate')}</th>
+                    <th className="py-2 px-4 border-b text-right">{t('currencyPairsTable.transactionCount')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {Object.entries(custodyAnalysis.currencyPairs).map(([pair, stats]) => (
+                    <tr key={pair}>
+                      <td className="py-2 px-4 border-b">{pair}</td>
+                      <td className="py-2 px-4 border-b text-right">{stats.medianRate}</td>
+                      <td className="py-2 px-4 border-b text-right">{stats.count}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </Card>
+
+      {/* ...existing code for wallet management... */}
       <Card className="mb-8">
         <div className="p-6">
           <h2 className="text-xl font-semibold mb-4">{t('walletManagement.addFunds')}</h2>

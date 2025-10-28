@@ -29,7 +29,7 @@ export async function getUserCustodyRecords() {
     // Get custody records for ALL users, not just current user
     const { data: custodyRecords, error } = await supabase
       .from('custody')
-      .select('*, users:user_id(name)');
+  .select('*, name, users:user_id(name)');
       
     if (error) {
       console.error('Custody API: Error fetching custody records:', error);
@@ -47,7 +47,8 @@ export async function getUserCustodyRecords() {
     // Format the records for display
     const formattedRecords = custodyRecords.map(record => {
       // Get the user's name from the joined users table, or use a fallback
-      const userName = (record.users?.name) || 'Unknown User';
+  const userName = (record.users?.name) || 'Unknown User';
+  const custodyName = record.name || `${userName}_custody_${record.currency_code}`;
       
       return {
         id: record.id,
@@ -56,7 +57,7 @@ export async function getUserCustodyRecords() {
         amount: parseFloat(record.amount),
         updatedAt: record.updated_at,
         // Format for dropdown display using name_custody_currency_code format
-        displayName: `${userName}_custody_${record.currency_code}: ${parseFloat(record.amount).toFixed(2)}`,
+  displayName: `${custodyName}: ${parseFloat(record.amount).toFixed(2)}`,
         // Add formatted value for dropdown selection
         value: `custody:${record.id}`
       };

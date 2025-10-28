@@ -245,26 +245,62 @@ export async function updateCustodyStatus(custodyId, status) {
         console.log('Cash Custody API: Creating custody record for cashier');
         
         try {
-          // Get the wallet to update its balance
-          const { data: wallet } = await supabase
-            .from('wallets')
-            .select('*')
-            .eq('id', custodyRecord.wallet_id)
+          // Get wallet currencies for this wallet
+          const { data: walletCurrencies, error: walletCurrenciesError } = await supabase
+            .from('wallet_currencies')
+            .select('currency_code, balance')
+            .eq('wallet_id', custodyRecord.wallet_id);
+          if (walletCurrenciesError) throw walletCurrenciesError;
+          // ...existing code...
+
+          // Get cashier user info for name
+          const { data: cashierUser, error: cashierError } = await supabase
+            .from('users')
+            .select('name, lastname')
+            .eq('id', custodyRecord.cashier_id)
             .single();
-            
-          // Create custody record in the custody table
-          await supabase
+          let cashierName = 'Cashier';
+          if (!cashierError && cashierUser) {
+            cashierName = `${cashierUser.name || ''}_${cashierUser.lastname || ''}`.replace(/_+$/, '');
+          }
+
+          // Build custody name
+          const custodyName = `${cashierName}_${custodyRecord.currency_code}`;
+
+          // Check if custody already exists for this user and currency
+          const { data: existingCustody, error: custodyCheckError } = await supabase
             .from('custody')
-            .insert({
-              id: generateUUID(),
-              user_id: custodyRecord.cashier_id,
-              wallet_id: custodyRecord.wallet_id,
-              amount: custodyRecord.amount,
-              currency_code: custodyRecord.currency_code,
-              status: 'active',
-              created_at: new Date().toISOString(),
-              custody_record_id: custodyRecord.id
-            });
+            .select('id, amount')
+            .eq('user_id', custodyRecord.cashier_id)
+            .eq('currency_code', custodyRecord.currency_code)
+            .single();
+
+          if (!custodyCheckError && existingCustody) {
+            // Add amount to existing custody and ensure name is set
+            await supabase
+              .from('custody')
+              .update({
+                amount: Number(existingCustody.amount) + Number(custodyRecord.amount),
+                name: custodyName,
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', existingCustody.id);
+          } else {
+            // Create new custody record with name
+            await supabase
+              .from('custody')
+              .insert({
+                id: generateUUID(),
+                user_id: custodyRecord.cashier_id,
+                wallet_id: custodyRecord.wallet_id,
+                amount: custodyRecord.amount,
+                currency_code: custodyRecord.currency_code,
+                name: custodyName,
+                status: 'active',
+                created_at: new Date().toISOString(),
+                custody_record_id: custodyRecord.id
+              });
+          }
         } catch (e) {
           console.error('Cash Custody API: Error creating custody record:', e);
           // Don't throw here, as we already approved the custody request

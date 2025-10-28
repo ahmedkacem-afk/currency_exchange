@@ -111,7 +111,7 @@ export default function DealershipExecutionerPage() {
         // Filter for validated transactions if needed (since our API supports filtering for unvalidated directly)
         let filteredData = transactionsData
         if (onlyValidated) {
-          filteredData = transactionsData.filter(tx => tx.is_validated === true)
+          filteredData = transactionsData.filter(tx => tx.validated === true)
         }
         
         // Transform the transaction data into the format needed for the UI
@@ -125,7 +125,7 @@ export default function DealershipExecutionerPage() {
           })
           
           // Determine validation status - default transactions need validation
-          const status = tx.is_validated ? 'validated' : (tx.needs_validation ? 'needs-validation' : 'needs-validation')
+          const status = tx.validated ? 'validated' : (tx.needsvalidation ? 'needs-validation' : 'needs-validation')
           
           // Use the actual transaction amount fields
           const amount = parseFloat(tx.amount || 0)
@@ -187,31 +187,14 @@ export default function DealershipExecutionerPage() {
         throw new Error('User not authenticated')
       }
       
-      // Create a validation record
-      const validationData = {
-        transaction_id: transactionId,
-        validator_id: user.id,
-        is_approved: decision === 'approve',
-        notes: notes,
-        validated_at: new Date().toISOString(),
-        type: 'transaction_validation'
-      }
-      
-      const { data, error } = await supabase
-        .from('transaction_validations')
-        .insert(validationData)
-        .select()
-        .single()
-      
-      if (error) throw error
-      
-      // Update the transaction status
+      // Update the transaction validation fields directly on transactions table
       const { error: txError } = await supabase
         .from('transactions')
         .update({
-          is_validated: decision === 'approve',
-          validated_by: user.id,
-          validated_at: new Date().toISOString(),
+          validated: decision === 'approve',
+          validatedby: user.id,
+          validated_at: Date.now(),
+          needsvalidation: false,
           validation_notes: notes
         })
         .eq('id', transactionId)

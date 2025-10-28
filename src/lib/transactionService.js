@@ -95,15 +95,19 @@ export const transactionService = {
       sourceName = walletData?.name || `Wallet (${sourceId})`;
     } else if (sourceType === 'custody') {
       // Get custody info with user name
-      const { data: custodyData } = await supabase
-        .from('custody')
-        .select('*, users:user_id(name)')
-        .eq('id', sourceId)
-        .single();
+      if (sourceId && sourceId !== 'custody') {
+        const { data: custodyData } = await supabase
+          .from('cash_custody')
+          .select('id, currency_code')
+          .eq('id', sourceId)
+          .single();
         
-      sourceName = custodyData 
-        ? `${custodyData.users?.name || 'User'}_custody_${custodyData.currency_code}`
-        : `Custody (${sourceId})`;
+        sourceName = custodyData 
+          ? `Custody_${custodyData.currency_code}`
+          : `Custody (${sourceId})`;
+      } else {
+        sourceName = 'Custody';
+      }
     }
     
     if (destinationType === 'wallet') {
@@ -117,15 +121,19 @@ export const transactionService = {
       destinationName = walletData?.name || `Wallet (${destinationId})`;
     } else if (destinationType === 'custody') {
       // Get custody info with user name
-      const { data: custodyData } = await supabase
-        .from('custody')
-        .select('*, users:user_id(name)')
-        .eq('id', destinationId)
-        .single();
+      if (destinationId && destinationId !== 'custody') {
+        const { data: custodyData } = await supabase
+          .from('cash_custody')
+          .select('id, currency_code')
+          .eq('id', destinationId)
+          .single();
         
-      destinationName = custodyData 
-        ? `${custodyData.users?.name || 'User'}_custody_${custodyData.currency_code}`
-        : `Custody (${destinationId})`;
+        destinationName = custodyData 
+          ? `Custody_${custodyData.currency_code}`
+          : `Custody (${destinationId})`;
+      } else {
+        destinationName = 'Custody';
+      }
     }
 
     // Get current user session for cashier ID
@@ -150,7 +158,7 @@ export const transactionService = {
       cashier_id: user.id,
       source: sourceName, // Use descriptive name instead of type
       destination: destinationName, // Use descriptive name instead of type
-      createdat: timestamp // Use the same timestamp for consistency
+      createdat: Date.now() // Unix timestamp in milliseconds
     };
     
     // Insert transaction record
@@ -278,15 +286,19 @@ export const transactionService = {
       sourceName = walletData?.name || `Wallet (${sourceId})`;
     } else if (sourceType === 'custody') {
       // Get custody info with user name
-      const { data: custodyData } = await supabase
-        .from('custody')
-        .select('*, users:user_id(name)')
-        .eq('id', sourceId)
-        .single();
+      if (sourceId && sourceId !== 'custody') {
+        const { data: custodyData } = await supabase
+          .from('cash_custody')
+          .select('id, currency_code')
+          .eq('id', sourceId)
+          .single();
         
-      sourceName = custodyData 
-        ? `${custodyData.users?.name || 'User'}_custody_${custodyData.currency_code}`
-        : `Custody (${sourceId})`;
+        sourceName = custodyData 
+          ? `Custody_${custodyData.currency_code}`
+          : `Custody (${sourceId})`;
+      } else {
+        sourceName = 'Custody';
+      }
     }
     
     if (destinationType === 'wallet') {
@@ -300,15 +312,19 @@ export const transactionService = {
       destinationName = walletData?.name || `Wallet (${destinationId})`;
     } else if (destinationType === 'custody') {
       // Get custody info with user name
-      const { data: custodyData } = await supabase
-        .from('custody')
-        .select('*, users:user_id(name)')
-        .eq('id', destinationId)
-        .single();
+      if (destinationId && destinationId !== 'custody') {
+        const { data: custodyData } = await supabase
+          .from('cash_custody')
+          .select('id, currency_code')
+          .eq('id', destinationId)
+          .single();
         
-      destinationName = custodyData 
-        ? `${custodyData.users?.name || 'User'}_custody_${custodyData.currency_code}`
-        : `Custody (${destinationId})`;
+        destinationName = custodyData 
+          ? `Custody_${custodyData.currency_code}`
+          : `Custody (${destinationId})`;
+      } else {
+        destinationName = 'Custody';
+      }
     }
     
     // Handle custody-to-custody case
@@ -337,7 +353,7 @@ export const transactionService = {
         cashier_id: user.id,
         source: sourceName,
         destination: destinationName,
-        createdat: timestamp
+        createdat: Date.now()
       };
       
       // Insert transaction record

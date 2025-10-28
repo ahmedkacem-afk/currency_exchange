@@ -27,8 +27,8 @@ export async function getRecentTransactions({ limit = 30, offset = 0, onlyNeedsV
     // Add filter if only transactions needing validation are requested
     if (onlyNeedsValidation) {
       query = query
-        .eq('needs_validation', true)
-        .eq('is_validated', false)
+        .eq('needsvalidation', true)
+        .eq('validated', false)
     }
     
     // Complete the query with ordering and pagination

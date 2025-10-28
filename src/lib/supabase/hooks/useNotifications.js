@@ -6,6 +6,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import * as notificationsApi from '../tables/notifications'
+import supabase from '../client'
 
 /**
  * Hook to fetch and manage user notifications

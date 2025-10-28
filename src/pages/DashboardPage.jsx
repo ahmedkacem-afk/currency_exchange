@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useI18n } from '../i18n/I18nProvider.jsx'
 import { getSummary, getAllStats, getWalletStats, getPrices, setPrices, getWallets, getAllCashCustody } from '../lib/api.js'
 import { getCustodySummary } from '../lib/supabase/utils/wallet_custody_helpers'
+import { getWalletCurrencyPairsAnalysis, getCustodyCurrencyPairsAnalysis, getOverallCurrencyPairsAnalysis } from '../lib/transactionAnalysis.js'
 import { Link, useNavigate } from 'react-router-dom'
 import { Card, CardHeader, CardBody } from '../components/Card.jsx'
 import Button from '../components/Button.jsx'
@@ -11,6 +12,8 @@ import { useToast } from '../components/Toast.jsx'
 import AddCurrencyModal from '../components/AddCurrencyModal.jsx'
 import AddCurrencyButton from '../components/AddCurrencyButton.jsx'
 import SaveButton from '../components/SaveButton.jsx'
+import CurrencyPairsTable, { CurrencyPairsSummary } from '../components/CurrencyPairsTable.jsx'
+import OverallMedianRatesTable from '../components/OverallMedianRatesTable.jsx'
 
 function StatCard({ title, value, onClick }) {
   return (
@@ -52,6 +55,12 @@ export default function DashboardPage() {
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(true)
   const [isAddCurrencyModalOpen, setIsAddCurrencyModalOpen] = useState(false)
+  
+  // Currency pairs analysis state
+  const [walletCurrencyAnalysis, setWalletCurrencyAnalysis] = useState(null)
+  const [overallCurrencyAnalysis, setOverallCurrencyAnalysis] = useState(null)
+  const [analysisLoading, setAnalysisLoading] = useState(false)
+  
   const { show } = useToast()
 
   useEffect(() => {
@@ -133,8 +142,12 @@ export default function DashboardPage() {
       if (custody) {
         // Combine given and received records, and add a debug log
         const allRecords = [...(custody.given || []), ...(custody.received || [])];
-        console.log('DashboardPage - Processing custody records:', allRecords);
-        setCustodyRecords(allRecords);
+        // Remove duplicates based on ID
+        const uniqueRecords = allRecords.filter((record, index, self) => 
+          index === self.findIndex(r => r.id === record.id)
+        );
+        console.log('DashboardPage - Processing custody records:', uniqueRecords);
+        setCustodyRecords(uniqueRecords);
       } else {
         console.log('DashboardPage - No custody records found');
         setCustodyRecords([]);
@@ -153,11 +166,68 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (selected) {
-      getWalletStats(selected).then(setStatsWallet)
+      // Check if it's a wallet or custody record
+      const isWallet = wallets.some(w => w.id === selected) || treasuryWallets.some(w => w.id === selected);
+      const isCustody = custodyRecords.some(c => c.id === selected);
+      
+      if (isWallet) {
+        getWalletStats(selected).then(setStatsWallet)
+        // Load currency pairs analysis for selected wallet
+        loadWalletCurrencyAnalysis(selected)
+      } else if (isCustody) {
+        setStatsWallet(null) // No wallet stats for custody
+        // Load currency pairs analysis for selected custody
+        loadCustodyCurrencyAnalysis(selected)
+      }
     } else {
       setStatsWallet(null)
+      setWalletCurrencyAnalysis(null)
     }
-  }, [selected])
+  }, [selected, wallets, treasuryWallets, custodyRecords])
+
+  // Load overall currency analysis on mount
+  useEffect(() => {
+    loadOverallCurrencyAnalysis()
+  }, [])
+
+  // Function to load currency pairs analysis for a specific wallet
+  const loadWalletCurrencyAnalysis = async (walletId) => {
+    try {
+      setAnalysisLoading(true)
+      const analysis = await getWalletCurrencyPairsAnalysis(walletId)
+      setWalletCurrencyAnalysis(analysis)
+    } catch (error) {
+      console.error('Error loading wallet currency analysis:', error)
+      setWalletCurrencyAnalysis(null)
+    } finally {
+      setAnalysisLoading(false)
+    }
+  }
+
+  // Function to load currency pairs analysis for a specific custody record
+  const loadCustodyCurrencyAnalysis = async (custodyId) => {
+    try {
+      setAnalysisLoading(true)
+      const analysis = await getCustodyCurrencyPairsAnalysis(custodyId)
+      setWalletCurrencyAnalysis(analysis) // Reuse the same state for consistency
+    } catch (error) {
+      console.error('Error loading custody currency analysis:', error)
+      setWalletCurrencyAnalysis(null)
+    } finally {
+      setAnalysisLoading(false)
+    }
+  }
+
+  // Function to load overall currency pairs analysis
+  const loadOverallCurrencyAnalysis = async () => {
+    try {
+      const analysis = await getOverallCurrencyPairsAnalysis()
+      setOverallCurrencyAnalysis(analysis)
+    } catch (error) {
+      console.error('Error loading overall currency analysis:', error)
+      setOverallCurrencyAnalysis(null)
+    }
+  }
 
   const selectedWallet = useMemo(() => {
     // Find the wallet in either regular wallets or treasury wallets
@@ -165,6 +235,13 @@ export default function DashboardPage() {
     console.log('Selected wallet:', wallet);
     return wallet;
   }, [wallets, treasuryWallets, selected])
+
+  const selectedCustody = useMemo(() => {
+    // Find the custody record if selected
+    const custody = custodyRecords.find(c => c.id === selected);
+    console.log('Selected custody:', custody);
+    return custody;
+  }, [custodyRecords, selected])
 
   async function onSavePrices(e) {
     e.preventDefault()
@@ -372,7 +449,22 @@ export default function DashboardPage() {
               onChange={e => setSelected(e.target.value)}
             >
               <option value="">--</option>
-              {wallets.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+              <optgroup label="Wallets">
+                {wallets.filter((w, index, self) => 
+                  index === self.findIndex(wallet => wallet.id === w.id)
+                ).map(w => <option key={`wallet-${w.id}`} value={w.id}>{w.name}</option>)}
+              </optgroup>
+              {custodyRecords.length > 0 && (
+                <optgroup label="Custody Records">
+                  {custodyRecords.filter((c, index, self) => 
+                    index === self.findIndex(custody => custody.id === c.id)
+                  ).map(c => (
+                    <option key={`custody-${c.id}`} value={c.id}>
+                      {c.cashier_name || 'Cashier'}_custody_{c.currency_code} ({c.amount} {c.currency_code})
+                    </option>
+                  ))}
+                </optgroup>
+              )}
             </select>
             
             {/* Add button for adding currencies to wallet */}
@@ -388,50 +480,72 @@ export default function DashboardPage() {
             )}
           </div>
           
-          {selectedWallet && (
+          {(selectedWallet || selectedCustody) && (
             <>
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                {/* Show legacy USD and LYD if present */}
-                {selectedWallet.usd !== undefined && (
+                {/* Show wallet information if a wallet is selected */}
+                {selectedWallet && (
+                  <>
+                    {/* Show legacy USD and LYD if present */}
+                    {selectedWallet.usd !== undefined && (
+                      <Card>
+                        <CardHeader 
+                          icon={<UsdIcon />} 
+                          title={Intl.NumberFormat().format(selectedWallet.usd)} 
+                          subtitle={t('dashboard.usd')} 
+                        />
+                      </Card>
+                    )}
+                    
+                    {selectedWallet.lyd !== undefined && (
+                      <Card>
+                        <CardHeader 
+                          icon={<LydIcon />} 
+                          title={Intl.NumberFormat().format(selectedWallet.lyd)} 
+                          subtitle={t('dashboard.lyd')} 
+                        />
+                      </Card>
+                    )}
+                    
+                    {/* Show all other currencies from the currencies object */}
+                    {selectedWallet.currencies && Object.entries(selectedWallet.currencies)
+                      // Filter out USD/LYD if they're already shown from legacy fields
+                      .filter(([code]) => 
+                        (code !== 'USD' || selectedWallet.usd === undefined) && 
+                        (code !== 'LYD' || selectedWallet.lyd === undefined)
+                      )
+                      .map(([code, balance]) => (
+                        <Card key={code}>
+                          <CardHeader 
+                            title={Intl.NumberFormat().format(balance)} 
+                            subtitle={code} 
+                          />
+                        </Card>
+                      ))
+                    }
+                  </>
+                )}
+
+                {/* Show custody information if a custody record is selected */}
+                {selectedCustody && (
                   <Card>
                     <CardHeader 
-                      icon={<UsdIcon />} 
-                      title={Intl.NumberFormat().format(selectedWallet.usd)} 
-                      subtitle={t('dashboard.usd')} 
+                      title={Intl.NumberFormat().format(selectedCustody.amount)} 
+                      subtitle={`${selectedCustody.currency_code} in Custody`} 
                     />
+                    <CardBody className="bg-indigo-50 rounded-b-xl h-2">
+                      <div className="text-xs text-gray-600 mt-2">
+                        <div>Cashier: {selectedCustody.cashier_name || 'Unknown'}</div>
+                        <div>Status: {selectedCustody.status}</div>
+                        <div>Date: {new Date(selectedCustody.created_at).toLocaleDateString()}</div>
+                      </div>
+                    </CardBody>
                   </Card>
                 )}
-                
-                {selectedWallet.lyd !== undefined && (
-                  <Card>
-                    <CardHeader 
-                      icon={<LydIcon />} 
-                      title={Intl.NumberFormat().format(selectedWallet.lyd)} 
-                      subtitle={t('dashboard.lyd')} 
-                    />
-                  </Card>
-                )}
-                
-                {/* Show all other currencies from the currencies object */}
-                {selectedWallet.currencies && Object.entries(selectedWallet.currencies)
-                  // Filter out USD/LYD if they're already shown from legacy fields
-                  .filter(([code]) => 
-                    (code !== 'USD' || selectedWallet.usd === undefined) && 
-                    (code !== 'LYD' || selectedWallet.lyd === undefined)
-                  )
-                  .map(([code, balance]) => (
-                    <Card key={code}>
-                      <CardHeader 
-                        title={Intl.NumberFormat().format(balance)} 
-                        subtitle={code} 
-                      />
-                    </Card>
-                  ))
-                }
               </div>
               
               {/* Show Custody Information if available */}
-              {selectedWallet.custodyBalances && Object.keys(selectedWallet.custodyBalances).length > 0 && (
+              {selectedWallet && selectedWallet.custodyBalances && Object.keys(selectedWallet.custodyBalances).length > 0 && (
                 <div className="mt-6">
                   <h3 className="text-lg font-medium text-gray-700 mb-3">{t('dashboard.cashInCustody', 'Cash In Custody')}</h3>
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
@@ -449,7 +563,7 @@ export default function DashboardPage() {
               )}
               
               {/* Show Total (Wallet + Custody) if custody exists */}
-              {selectedWallet.totalWithCustody && (
+              {selectedWallet && selectedWallet.totalWithCustody && (
                 <div className="mt-6">
                   <h3 className="text-lg font-medium text-gray-700 mb-3">{t('dashboard.totalWithCustody', 'Total (Wallet + Custody)')}</h3>
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
@@ -471,40 +585,32 @@ export default function DashboardPage() {
       </Card>
 
       {loading && <div className="text-sm text-gray-500">Loading...</div>}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      
+      {/* Currency Pairs Analysis Section */}
+      
+      {/* Wallet/Custody-specific exchange rate analysis - Only when wallet or custody is selected */}
+      {selected && (selectedWallet || selectedCustody) && walletCurrencyAnalysis?.currencyPairs && Object.keys(walletCurrencyAnalysis.currencyPairs).length > 0 && (
+        <CurrencyPairsTable 
+          currencyPairs={walletCurrencyAnalysis.currencyPairs}
+          title={`Exchange Rate Analysis - ${selectedWallet ? selectedWallet.name : (selectedCustody ? `${selectedCustody.cashier_name || 'Cashier'}_custody_${selectedCustody.currency_code}` : 'Unknown')}`}
+          showTransactionCount={true}
+          showAmountInfo={false}
+        />
+      )}
+
+      {/* Overall Exchange Rates - Always visible */}
+      {overallCurrencyAnalysis?.currencyPairs && Object.keys(overallCurrencyAnalysis.currencyPairs).length > 0 ? (
+        <OverallMedianRatesTable currencyPairs={overallCurrencyAnalysis.currencyPairs} />
+      ) : (
         <Card>
-          <CardHeader title={t('dashboard.buyInfo')} />
+          <CardHeader title={t('currencyPairs.overallExchangeRates', 'Overall Exchange Rates')} />
           <CardBody>
-            <Trio 
-              title="" 
-              dataset={selected 
-                ? statsWallet?.buy 
-                : statsAll ? {
-                    median: statsAll.buyAverage,
-                    min: statsAll.buyAverage,
-                    max: statsAll.buyAverage
-                  } : null
-              } 
-            />
+            <div className="text-center text-gray-500 py-8">
+              {t('currencyPairs.noData', 'No exchange transaction data available')}
+            </div>
           </CardBody>
         </Card>
-        <Card>
-          <CardHeader title={t('dashboard.sellInfo')} />
-          <CardBody>
-            <Trio 
-              title="" 
-              dataset={selected 
-                ? statsWallet?.sell 
-                : statsAll ? {
-                    median: statsAll.sellAverage,
-                    min: statsAll.sellAverage,
-                    max: statsAll.sellAverage
-                  } : null
-              } 
-            />
-          </CardBody>
-        </Card>
-      </div>
+      )}
 
       <Card>
         <CardHeader title={t('dashboard.managerPrices')} />
@@ -622,7 +728,11 @@ export default function DashboardPage() {
               // Process custody records
               if (custody) {
                 const allRecords = [...(custody.given || []), ...(custody.received || [])];
-                setCustodyRecords(allRecords);
+                // Remove duplicates based on ID
+                const uniqueRecords = allRecords.filter((record, index, self) => 
+                  index === self.findIndex(r => r.id === record.id)
+                );
+                setCustodyRecords(uniqueRecords);
               }
             } catch (err) {
               console.error('Error refreshing data:', err);

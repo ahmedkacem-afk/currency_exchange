@@ -7,6 +7,7 @@
 import supabase, { handleApiError } from '../client'
 import { generateUUID } from '../../uuid'
 import { calculateCustodyTotalsByWallet, mergeWalletWithCustody } from '../utils/wallet_custody_helpers'
+import { getCustodyTotalsByWallet } from './wallet_custody_helpers'
 
 /**
  * Gets all wallets with their currencies and custody information
@@ -260,6 +261,19 @@ export async function getWalletById(walletId) {
  */
 export async function createWallet({ name, usd = 0, lyd = 0, currencies = {} }) {
   try {
+    // Enforce unique wallet names
+    if (!name || !name.trim()) {
+      throw new Error('Wallet name is required');
+    }
+    const { data: existing } = await supabase
+      .from('wallets')
+      .select('id')
+      .ilike('name', name.trim())
+      .limit(1);
+    if (existing && existing.length > 0) {
+      throw new Error('A wallet with this name already exists');
+    }
+
     // Create wallet with legacy fields
     const walletId = generateUUID();
     const newWallet = {
@@ -380,7 +394,7 @@ export async function getWalletStats(walletId) {
     // Get wallet info
     const { data: wallet, error: walletError } = await supabase
       .from('wallets')
-      .select('id, name, usd, lyd, is_treasury, user_id')
+      .select('id, name, usd, lyd, is_treasury')
       .eq('id', walletId)
       .single()
       
@@ -393,9 +407,11 @@ export async function getWalletStats(walletId) {
     // Get recent transactions for this wallet
     const { data: transactions, error: txError } = await supabase
       .from('transactions')
-      .select('id, type, dinarprice')
+      .select('id, type, exchange_rate, currency_code, exchange_currency_code, amount, total_amount')
       .eq('walletid', walletId)
-      .order('id', { ascending: false })
+      .not('exchange_rate', 'is', null)
+      .not('exchange_currency_code', 'is', null)
+      .order('createdat', { ascending: false })
       .limit(30)
       
     if (txError) throw txError
@@ -405,7 +421,7 @@ export async function getWalletStats(walletId) {
     const sells = transactions.filter(tx => tx.type === 'sell')
     
     // Calculate buy stats
-    const buyPrices = buys.map(tx => Number(tx.dinarprice)).sort((a, b) => a - b)
+    const buyPrices = buys.map(tx => Number(tx.exchange_rate)).sort((a, b) => a - b)
     const buy = buyPrices.length > 0 ? {
       min: buyPrices[0],
       max: buyPrices[buyPrices.length - 1],
@@ -413,7 +429,7 @@ export async function getWalletStats(walletId) {
     } : null
     
     // Calculate sell stats
-    const sellPrices = sells.map(tx => Number(tx.dinarprice)).sort((a, b) => a - b)
+    const sellPrices = sells.map(tx => Number(tx.exchange_rate)).sort((a, b) => a - b)
     const sell = sellPrices.length > 0 ? {
       min: sellPrices[0],
       max: sellPrices[sellPrices.length - 1],

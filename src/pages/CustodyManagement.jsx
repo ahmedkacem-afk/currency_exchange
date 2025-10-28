@@ -14,6 +14,7 @@ import { useI18n } from '../i18n/I18nProvider';
 export default function CustodyManagement() {
   const [custodyRecords, setCustodyRecords] = useState({ given: [], received: [] });
   const [loading, setLoading] = useState(true);
+  const [custodyPairsAnalysis, setCustodyPairsAnalysis] = useState(null);
   const navigate = useNavigate();
   const { show } = useToast();
   const { t } = useI18n();
@@ -21,6 +22,7 @@ export default function CustodyManagement() {
   // Load custody records
   useEffect(() => {
     fetchCustodyRecords();
+    fetchCustodyPairsAnalysis();
   }, []);
 
   const fetchCustodyRecords = async () => {
@@ -37,6 +39,17 @@ export default function CustodyManagement() {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Fetch custody currency pairs analysis
+  const fetchCustodyPairsAnalysis = async () => {
+    try {
+      const { getOverallCustodyCurrencyPairsAnalysis } = await import('../lib/custodyAnalysis');
+      const analysis = await getOverallCustodyCurrencyPairsAnalysis();
+      setCustodyPairsAnalysis(analysis);
+    } catch (error) {
+      console.error('Error fetching custody pairs analysis:', error);
     }
   };
 
@@ -99,6 +112,34 @@ export default function CustodyManagement() {
 
   return (
       <div className="max-w-6xl mx-auto px-4 py-6">
+        {/* Custody Currency Pairs Analysis Table */}
+        <Card className="mb-6">
+          <h2 className="text-xl font-semibold mb-4">{t('custodyManagement.custodyPairsAnalysis')}</h2>
+          {custodyPairsAnalysis ? (
+            <div className="overflow-x-auto">
+              <table className="min-w-full bg-white">
+                <thead>
+                  <tr>
+                    <th className="py-2 px-4 border-b text-left">{t('currencyPairsTable.pair')}</th>
+                    <th className="py-2 px-4 border-b text-right">{t('currencyPairsTable.medianRate')}</th>
+                    <th className="py-2 px-4 border-b text-right">{t('currencyPairsTable.transactionCount')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {Object.entries(custodyPairsAnalysis.currencyPairs).map(([pair, stats]) => (
+                    <tr key={pair}>
+                      <td className="py-2 px-4 border-b">{pair}</td>
+                      <td className="py-2 px-4 border-b text-right">{stats.medianRate}</td>
+                      <td className="py-2 px-4 border-b text-right">{stats.count}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="text-gray-500">{t('common.loading')}</p>
+          )}
+        </Card>
         <h1 className="text-2xl font-bold mb-6">{t('custodyManagement.title')}</h1>
 
         <div className="flex gap-4 mb-6">
