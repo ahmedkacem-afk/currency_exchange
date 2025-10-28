@@ -65,18 +65,9 @@ export default function WalletManagementPage() {
   // Load custodies for selection
   const loadCustodies = async () => {
     try {
-      const { getAllCashCustody } = await import('../lib/api');
-      const records = await getAllCashCustody();
-      // Flatten given/received arrays if needed
-      let allCustodies = [];
-      if (records) {
-        if (Array.isArray(records)) {
-          allCustodies = records;
-        } else {
-          allCustodies = [...(records.given || []), ...(records.received || [])];
-        }
-      }
-      setCustodies(allCustodies);
+      const { getUserCustodyRecords } = await import('../lib/supabase/tables/custody');
+      const records = await getUserCustodyRecords();
+      setCustodies(records);
     } catch (error) {
       console.error('Error loading custodies:', error);
     }
@@ -159,7 +150,7 @@ export default function WalletManagementPage() {
             <option value="">{t('common.selectOption')}</option>
             {custodies.map((custody) => (
               <option key={custody.id} value={custody.id}>
-                {custody.cashier?.name || custody.treasurer?.name || custody.id} - {custody.status}
+                {custody.name || custody.displayName || custody.id}
               </option>
             ))}
           </select>
