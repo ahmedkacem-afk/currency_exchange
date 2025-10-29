@@ -27,6 +27,7 @@ import AddCurrencyButton from "../components/AddCurrencyButton.jsx"
 import SaveButton from "../components/SaveButton.jsx"
 import CurrencyPairsTable from "../components/CurrencyPairsTable.jsx"
 import OverallMedianRatesTable from "../components/OverallMedianRatesTable.jsx"
+import { useAuth } from "../lib/AuthContext"
 
 function StatCard({ title, value, onClick }) {
   return (
@@ -66,6 +67,15 @@ function Trio({ title, dataset }) {
 export default function DashboardPage() {
   const { t } = useI18n()
   const navigate = useNavigate()
+  const { userRole } = useAuth() // Get user role from auth context
+  const { showToast } = useToast()
+
+  useEffect(() => {
+    if (userRole && userRole !== "manager") {
+      navigate("/cashier", { replace: true })
+    }
+  }, [userRole, navigate])
+
   const [summary, setSummary] = useState(null)
   const [wallets, setWallets] = useState([])
   const [treasuryWallets, setTreasuryWallets] = useState([])
