@@ -191,11 +191,11 @@ export default function DealershipExecutionerPage() {
       const { error: txError } = await supabase
         .from('transactions')
         .update({
-          validated: decision === 'approve',
-          validatedby: user.id,
+          is_validated: decision === 'approve',
+          validator_id: user.id,
           validated_at: Date.now(),
-          needsvalidation: false,
-          validation_notes: notes
+          needs_validation: false
+          // If you want to store notes, add a column to the schema
         })
         .eq('id', transactionId)
       
