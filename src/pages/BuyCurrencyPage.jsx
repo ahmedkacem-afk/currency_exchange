@@ -3,13 +3,15 @@
 import { useState, useEffect } from "react"
 import { Link } from "react-router-dom"
 import { useI18n } from "../i18n/I18nProvider.jsx"
-import { getPrices, getWallets, getAllCurrencyTypes } from "../lib/api.js"
+import { getWallets, getAllCurrencyTypes } from "../lib/api.js"
+import { getExchangeRates } from "../lib/supabase/tables/exchange_rates.js"
 import { Card, CardHeader, CardBody } from "../components/Card.jsx"
 import Button from "../components/Button.jsx"
 import Input from "../components/Input.jsx"
 import CurrencySelect from "../components/CurrencySelect.jsx"
 import { useToast } from "../components/Toast.jsx"
 import { getUserCustodyRecords } from "../lib/supabase/tables/custody.js"
+import { getBuyRate } from "../lib/exchangeRateCalculator.js"
 
 /**
  * Buy Currency Page - Interface for buying currency from customers
@@ -17,7 +19,7 @@ import { getUserCustodyRecords } from "../lib/supabase/tables/custody.js"
  */
 export default function BuyCurrencyPage() {
   const { t } = useI18n()
-  const [prices, setPrices] = useState(null)
+  const [exchangeRates, setExchangeRates] = useState([])
   const [wallets, setWallets] = useState([])
   const [custodyRecords, setCustodyRecords] = useState([])
   const [currencyTypes, setCurrencyTypes] = useState([])
@@ -27,14 +29,13 @@ export default function BuyCurrencyPage() {
 
   // Form state
   const [formData, setFormData] = useState({
-    receiveCurrencyCode: "", // Currency code to receive from customer (e.g., 'LYD-OLD', 'USD')
-    payCurrencyCode: "", // Currency code to pay to customer (e.g., 'USD', 'LYD-NEW')
+    receiveCurrencyCode: "", // Currency code to receive from customer (e.g., 'USDT', 'EUR')
+    payCurrencyCode: "", // Currency code to pay to customer (e.g., 'USD', 'LYD')
     amount: "", // Amount of currency to buy
-    sourceWallet: "custody", // Default to custody
-    destinationWallet: "", // Wallet to deposit into
+    sourceWallet: "", // Wallet/custody where we get money to pay customer
+    destinationWallet: "", // Wallet/custody where we deposit the currency received
     price: "", // Price/rate of the currency exchange
     receivedAmount: "", // Amount received from customer
-    clientName: "", // Name of the client
   })
 
   // Calculate the total based on amount and price
@@ -47,37 +48,20 @@ export default function BuyCurrencyPage() {
     async function loadData() {
       try {
         setLoading(true)
-        console.log("BuyCurrencyPage: Starting data fetch")
 
-        // Load prices, wallets, custody records, and currency types in parallel
-        const [priceData, walletsData, custodyData, currencyTypesData] = await Promise.all([
-          getPrices(),
+        const [exchangeRatesData, walletsData, custodyData, currencyTypesData] = await Promise.all([
+          getExchangeRates(),
           getWallets(),
-          getUserCustodyRecords(), // Load raw custody records
+          getUserCustodyRecords(),
           getAllCurrencyTypes(),
         ])
 
-        console.log("BuyCurrencyPage: Custody Records Received:", custodyData)
-        console.log("BuyCurrencyPage: Wallets Received:", walletsData)
-
-        setPrices(priceData)
+        setExchangeRates(exchangeRatesData)
         setWallets(walletsData?.wallets?.filter((wallet) => !wallet.is_treasury) || [])
-        console.log("BuyCurrencyPage: Setting custody records:", custodyData)
         setCustodyRecords(custodyData?.data || custodyData || [])
         setCurrencyTypes(currencyTypesData || [])
-
-        // Set default price if available
-        if (priceData) {
-          // Default to new dinar price
-          const defaultPrice = priceData.buynew
-
-          setFormData((prev) => ({
-            ...prev,
-            price: defaultPrice,
-          }))
-        }
       } catch (error) {
-        console.error("Error loading data:", error)
+        console.error("[v0] Error loading data:", error)
         show("Failed to load data", "error")
       } finally {
         setLoading(false)
@@ -87,40 +71,27 @@ export default function BuyCurrencyPage() {
     loadData()
   }, [show])
 
-  // Update price when currencies change
   useEffect(() => {
-    if (prices && formData.receiveCurrencyCode && formData.payCurrencyCode) {
-      // For LYD, we'll use the buy price from the manager prices
-      // For other currency pairs, we could implement custom pricing logic in the future
-      let updatedPrice
-
-      // Check if the currency is LYD (use exact code from database)
-      if (formData.receiveCurrencyCode === "LYD") {
-        // Use the regular buy price for LYD
-        updatedPrice = prices.buynew || prices.buy || "1.00"
-      } else {
-        // Default price or custom price logic for other currencies
-        // In the future, this could be expanded to handle different currency pairs
-        updatedPrice = formData.price || "1.00"
-      }
+    if (exchangeRates.length > 0 && formData.receiveCurrencyCode && formData.payCurrencyCode) {
+      // For BUY: we're buying receiveCurrencyCode with payCurrencyCode
+      // Use the buy rate of the currency we're receiving
+      const buyRate = getBuyRate(formData.receiveCurrencyCode, formData.payCurrencyCode, exchangeRates)
 
       setFormData((prev) => ({
         ...prev,
-        price: updatedPrice,
+        price: buyRate.toFixed(6),
       }))
 
-      // Reset destination wallet if the currency changed and previous wallet doesn't support the new currency
       if (formData.destinationWallet.startsWith("custody:")) {
         const custodyId = formData.destinationWallet.split(":")[1]
         const selectedCustody = custodyRecords.find((c) => c.id === custodyId)
 
         if (selectedCustody && selectedCustody.currencyCode !== formData.receiveCurrencyCode) {
-          // Reset to empty if the currencies don't match
           setFormData((prev) => ({ ...prev, destinationWallet: "" }))
         }
       }
     }
-  }, [formData.receiveCurrencyCode, formData.payCurrencyCode, prices, custodyRecords])
+  }, [formData.receiveCurrencyCode, formData.payCurrencyCode, exchangeRates, custodyRecords])
 
   const handleInputChange = (e) => {
     const { name, value } = e.target
@@ -128,6 +99,74 @@ export default function BuyCurrencyPage() {
       ...prev,
       [name]: value,
     }))
+  }
+
+  const getSourceOptions = () => {
+    const options = []
+
+    if (formData.payCurrencyCode) {
+      const filteredCustody = custodyRecords.filter((c) => c.currencyCode === formData.payCurrencyCode)
+      if (filteredCustody.length > 0) {
+        options.push(
+          <optgroup key="custody" label="Personal Custody">
+            {filteredCustody.map((custody) => (
+              <option key={custody.id} value={custody.value || `custody:${custody.id}`}>
+                {custody.displayName}
+              </option>
+            ))}
+          </optgroup>,
+        )
+      }
+
+      const filteredWallets = wallets.filter((w) => w.currencies && w.currencies[formData.payCurrencyCode])
+      if (filteredWallets.length > 0) {
+        options.push(
+          <optgroup key="wallets" label="Wallets">
+            {filteredWallets.map((wallet) => (
+              <option key={wallet.id} value={`wallet:${wallet.id}`}>
+                {wallet.name}
+              </option>
+            ))}
+          </optgroup>,
+        )
+      }
+    }
+
+    return options
+  }
+
+  const getDestinationOptions = () => {
+    const options = []
+
+    if (formData.receiveCurrencyCode) {
+      const filteredCustody = custodyRecords.filter((c) => c.currencyCode === formData.receiveCurrencyCode)
+      if (filteredCustody.length > 0) {
+        options.push(
+          <optgroup key="custody" label="Personal Custody">
+            {filteredCustody.map((custody) => (
+              <option key={custody.id} value={custody.value || `custody:${custody.id}`}>
+                {custody.displayName}
+              </option>
+            ))}
+          </optgroup>,
+        )
+      }
+
+      const filteredWallets = wallets.filter((w) => w.currencies && w.currencies[formData.receiveCurrencyCode])
+      if (filteredWallets.length > 0) {
+        options.push(
+          <optgroup key="wallets" label="Wallets">
+            {filteredWallets.map((wallet) => (
+              <option key={wallet.id} value={`wallet:${wallet.id}`}>
+                {wallet.name}
+              </option>
+            ))}
+          </optgroup>,
+        )
+      }
+    }
+
+    return options
   }
 
   const handleSubmit = async (e) => {
@@ -138,13 +177,20 @@ export default function BuyCurrencyPage() {
       // Import the transaction service
       const { transactionService } = await import("../lib/transactionService")
 
+      const extractId = (value) => {
+        if (value.startsWith("wallet:") || value.startsWith("custody:")) {
+          return value.split(":")[1]
+        }
+        return value
+      }
+
       // Create a buy transaction (customer selling to us)
       const result = await transactionService.createBuyTransaction({
         ...formData,
+        sourceWallet: extractId(formData.sourceWallet),
+        destinationWallet: extractId(formData.destinationWallet),
         total: Number.parseFloat(total),
       })
-
-      console.log("Buy Currency Transaction:", result)
 
       // Show success message
       show("Currency purchase recorded successfully", "success")
@@ -154,14 +200,13 @@ export default function BuyCurrencyPage() {
         receiveCurrencyCode: "",
         payCurrencyCode: "",
         amount: "",
-        sourceWallet: "custody",
+        sourceWallet: "",
         destinationWallet: "",
         price: "",
         receivedAmount: "",
-        clientName: "",
       })
     } catch (error) {
-      console.error("Error recording currency purchase:", error)
+      console.error("[v0] Error recording currency purchase:", error)
       show(error.message || "Failed to record purchase", "error")
     } finally {
       setSubmitting(false)
@@ -169,9 +214,7 @@ export default function BuyCurrencyPage() {
   }
 
   // Use currency types directly from the database
-  // No static options to ensure compatibility with database values
   const prepareCurrencyOptions = () => {
-    // Return all currency types as-is
     return [...currencyTypes]
   }
 
@@ -309,10 +352,11 @@ export default function BuyCurrencyPage() {
                 </div>
               </div>
 
-              {/* Wallet selection section */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">{t("cashier.sourceWallet")}</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    {t("cashier.sourceWallet")} ({t("cashier.whereToPayFrom")})
+                  </label>
                   <select
                     name="sourceWallet"
                     value={formData.sourceWallet}
@@ -320,40 +364,14 @@ export default function BuyCurrencyPage() {
                     className="w-full border-gray-300 rounded-md shadow-sm focus:border-emerald-500 focus:ring-emerald-500"
                     required
                   >
-                    <option value="client">{t("cashier.clientDirectly")}</option>
-
-                    {/* Custody Records Group */}
-                    {(() => {
-                      console.log("BuyCurrencyPage: Rendering custody records in source dropdown:", custodyRecords)
-                      return (
-                        custodyRecords.length > 0 && (
-                          <optgroup label="Personal Custody">
-                            {custodyRecords.map((custody) => (
-                              <option key={custody.id} value={custody.value || `custody:${custody.id}`}>
-                                {custody.displayName}
-                              </option>
-                            ))}
-                          </optgroup>
-                        )
-                      )
-                    })()}
-
-                    {/* Non-Treasury Wallets Group */}
-                    {wallets.length > 0 && (
-                      <optgroup label="Wallets">
-                        {wallets.map((wallet) => (
-                          <option key={wallet.id} value={`wallet:${wallet.id}`}>
-                            {wallet.name}
-                          </option>
-                        ))}
-                      </optgroup>
-                    )}
+                    <option value="">{t("cashier.selectWallet")}</option>
+                    {getSourceOptions()}
                   </select>
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    {t("cashier.destinationWallet")}
+                    {t("cashier.destinationWallet")} ({t("cashier.whereToDepositTo")})
                   </label>
                   <select
                     name="destinationWallet"
@@ -363,63 +381,9 @@ export default function BuyCurrencyPage() {
                     required
                   >
                     <option value="">{t("cashier.selectWallet")}</option>
-                    <option value="client">{t("cashier.clientDirectly")}</option>
-
-                    {/* Custody Records Group - Show all custodies */}
-                    {(() => {
-                      console.log("BuyCurrencyPage: Rendering custody records in destination dropdown:", custodyRecords)
-                      return (
-                        custodyRecords.length > 0 && (
-                          <optgroup label="Personal Custody">
-                            {custodyRecords.map((custody) => (
-                              <option key={custody.id} value={custody.value || `custody:${custody.id}`}>
-                                {custody.displayName}
-                              </option>
-                            ))}
-                          </optgroup>
-                        )
-                      )
-                    })()}
-
-                    {/* Non-Treasury Wallets Group */}
-                    {wallets.length > 0 && (
-                      <optgroup label="Wallets">
-                        {wallets.map((wallet) => (
-                          <option key={wallet.id} value={`wallet:${wallet.id}`}>
-                            {wallet.name}
-                          </option>
-                        ))}
-                      </optgroup>
-                    )}
+                    {getDestinationOptions()}
                   </select>
                 </div>
-              </div>
-
-              {/* Client info and received amount */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Input
-                  label={t("cashier.clientName")}
-                  type="text"
-                  name="clientName"
-                  value={formData.clientName}
-                  onChange={handleInputChange}
-                  placeholder={t("cashier.enterClientName")}
-                  required
-                />
-
-                {formData.sourceWallet === "custody" && (
-                  <Input
-                    label={t("cashier.receivedAmount")}
-                    type="number"
-                    name="receivedAmount"
-                    value={formData.receivedAmount}
-                    onChange={handleInputChange}
-                    placeholder="0.00"
-                    min="0"
-                    step="0.01"
-                    required
-                  />
-                )}
               </div>
 
               {/* Total calculation display */}
@@ -458,23 +422,6 @@ export default function BuyCurrencyPage() {
                 </Button>
               </div>
             </form>
-          )}
-
-          {/* Current rates display */}
-          {prices && !loading && (
-            <div className="mt-6 p-4 bg-blue-50 rounded-lg">
-              <h3 className="text-md font-medium mb-2">{t("cashier.currentBuyRates")}:</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="flex justify-between">
-                  <span>{t("cashier.oldDinar")}:</span>
-                  <span className="font-semibold">{prices.buyold}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>{t("cashier.newDinar")}:</span>
-                  <span className="font-semibold">{prices.buynew}</span>
-                </div>
-              </div>
-            </div>
           )}
         </CardBody>
       </Card>

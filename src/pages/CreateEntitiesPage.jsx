@@ -58,12 +58,15 @@ export default function CreateEntitiesPage() {
     e.preventDefault()
     setLoading((s) => ({ ...s, wallet: true }))
     try {
-      // Prepare currencies payload
       const currencies = {}
 
-      // Add USD and LYD for legacy support
-      currencies.USD = Number(wUsd) || 0
-      currencies.LYD = Number(wLyd) || 0
+      // Add USD and LYD from input fields
+      if (wUsd && Number(wUsd) > 0) {
+        currencies.USD = Number(wUsd)
+      }
+      if (wLyd && Number(wLyd) > 0) {
+        currencies.LYD = Number(wLyd)
+      }
 
       // Add additional currencies
       additionalCurrencies.forEach((curr) => {
@@ -74,8 +77,6 @@ export default function CreateEntitiesPage() {
 
       const { wallet } = await createWallet({
         name: wName,
-        usd: Number(wUsd) || 0,
-        lyd: Number(wLyd) || 0,
         currencies,
       })
       setMsg(`Wallet "${wallet.name}" created successfully`)
@@ -137,7 +138,7 @@ export default function CreateEntitiesPage() {
           "warning",
         )
       } else {
-  show(`User "${user.name}" created successfully with role "${user.role_name || user.role}".`, "success")
+        show(`User "${user.name}" created successfully with role "${user.role_name || user.role}".`, "success")
       }
 
       // Reset form

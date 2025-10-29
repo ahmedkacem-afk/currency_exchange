@@ -2,15 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { useI18n } from "../i18n/I18nProvider.jsx"
-import {
-  getSummary,
-  getAllStats,
-  getWalletStats,
-  getPrices,
-  setPrices,
-  getWallets,
-  getUserCustodyRecords,
-} from "../lib/api.js"
+import { getSummary, getAllStats, getWalletStats, getWallets, getUserCustodyRecords } from "../lib/api.js"
 import {
   getWalletCurrencyPairsAnalysis,
   getCustodyCurrencyPairsAnalysis,
@@ -18,16 +10,14 @@ import {
 } from "../lib/transactionAnalysis.js"
 import { useNavigate } from "react-router-dom"
 import { Card, CardHeader, CardBody } from "../components/Card.jsx"
-import Button from "../components/Button.jsx"
-import Input from "../components/Input.jsx"
 import { UsdIcon, LydIcon } from "../components/Icons.jsx"
 import { useToast } from "../components/Toast.jsx"
 import AddCurrencyModal from "../components/AddCurrencyModal.jsx"
 import AddCurrencyButton from "../components/AddCurrencyButton.jsx"
-import SaveButton from "../components/SaveButton.jsx"
 import CurrencyPairsTable from "../components/CurrencyPairsTable.jsx"
 import OverallMedianRatesTable from "../components/OverallMedianRatesTable.jsx"
 import { useAuth } from "../lib/AuthContext"
+import ExchangeRatesManager from "../components/ExchangeRatesManager.jsx"
 
 function StatCard({ title, value, onClick }) {
   return (
@@ -83,8 +73,6 @@ export default function DashboardPage() {
   const [selected, setSelected] = useState("")
   const [statsAll, setStatsAll] = useState(null)
   const [statsWallet, setStatsWallet] = useState(null)
-  const [prices, setPricesState] = useState(null)
-  const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(true)
   const [isAddCurrencyModalOpen, setIsAddCurrencyModalOpen] = useState(false)
 
@@ -126,20 +114,13 @@ export default function DashboardPage() {
         console.error("Error loading stats:", error)
         return null
       }),
-
-      // Get prices
-      getPrices().catch((error) => {
-        console.error("Error loading prices:", error)
-        return null
-      }),
     ])
-      .then(([s, ws, custody, sa, p]) => {
+      .then(([s, ws, custody, sa]) => {
         console.log("DashboardPage - All data loaded:", {
           summary: s,
           wallets: ws,
           custody: custody,
           stats: sa,
-          prices: p,
         })
 
         // Add detailed logging for wallets structure
@@ -186,7 +167,6 @@ export default function DashboardPage() {
 
         // Set other data
         setStatsAll(sa)
-        setPricesState(p)
       })
       .catch((err) => {
         console.error("DashboardPage - Error loading dashboard data:", err)
@@ -275,39 +255,6 @@ export default function DashboardPage() {
     console.log("Selected custody:", custody)
     return custody
   }, [custodyRecords, selected])
-
-  async function onSavePrices(e) {
-    e.preventDefault()
-    try {
-      setSaving(true)
-      console.log("Saving prices:", {
-        sellold: Number(prices.sellold),
-        sellnew: Number(prices.sellnew),
-        buyold: Number(prices.buyold),
-        buynew: Number(prices.buynew),
-        sellDisabled: Boolean(prices.sellDisabled),
-        buyDisabled: Boolean(prices.buyDisabled),
-      })
-
-      const updated = await setPrices({
-        sellold: Number(prices.sellold),
-        sellnew: Number(prices.sellnew),
-        buyold: Number(prices.buyold),
-        buynew: Number(prices.buynew),
-        sellDisabled: Boolean(prices.sellDisabled),
-        buyDisabled: Boolean(prices.buyDisabled),
-      })
-
-      console.log("Prices updated response:", updated)
-      setPricesState(updated)
-      show("Prices saved successfully", "success")
-    } catch (error) {
-      console.error("Error saving prices:", error)
-      show("Error saving prices: " + (error.message || "Unknown error"), "error")
-    } finally {
-      setSaving(false)
-    }
-  }
 
   return (
     <div className="space-y-6">
@@ -648,92 +595,7 @@ export default function DashboardPage() {
         </Card>
       )}
 
-      <Card>
-        <CardHeader title={t("dashboard.managerPrices")} />
-        <CardBody>
-          <form onSubmit={onSavePrices} className="space-y-4">
-            {/* Selling Section */}
-            <div className="border p-4 rounded-lg mb-4">
-              <div className="flex justify-between items-center mb-3">
-                <h3 className="font-semibold text-lg">Selling Prices</h3>
-                <div className="flex items-center">
-                  <span className="mr-2 text-sm text-gray-600">{prices?.sellDisabled ? "Disabled" : "Enabled"}</span>
-                  <Button
-                    type="button"
-                    variant={prices?.sellDisabled ? "success" : "danger"}
-                    size="sm"
-                    onClick={() =>
-                      setPricesState((p) => ({
-                        ...p,
-                        sellDisabled: !p?.sellDisabled,
-                      }))
-                    }
-                  >
-                    {prices?.sellDisabled ? "Enable" : "Disable"}
-                  </Button>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Input
-                  label={t("dashboard.sellold")}
-                  value={prices?.sellold ?? ""}
-                  onChange={(e) => setPricesState((p) => ({ ...p, sellold: e.target.value }))}
-                  disabled={prices?.sellDisabled}
-                />
-                <Input
-                  label={t("dashboard.sellnew")}
-                  value={prices?.sellnew ?? ""}
-                  onChange={(e) => setPricesState((p) => ({ ...p, sellnew: e.target.value }))}
-                  disabled={prices?.sellDisabled}
-                />
-              </div>
-            </div>
-
-            {/* Buying Section */}
-            <div className="border p-4 rounded-lg mb-4">
-              <div className="flex justify-between items-center mb-3">
-                <h3 className="font-semibold text-lg">Buying Prices</h3>
-                <div className="flex items-center">
-                  <span className="mr-2 text-sm text-gray-600">{prices?.buyDisabled ? "Disabled" : "Enabled"}</span>
-                  <Button
-                    type="button"
-                    variant={prices?.buyDisabled ? "success" : "danger"}
-                    size="sm"
-                    onClick={() =>
-                      setPricesState((p) => ({
-                        ...p,
-                        buyDisabled: !p?.buyDisabled,
-                      }))
-                    }
-                  >
-                    {prices?.buyDisabled ? "Enable" : "Disable"}
-                  </Button>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Input
-                  label={t("dashboard.buyold")}
-                  value={prices?.buyold ?? ""}
-                  onChange={(e) => setPricesState((p) => ({ ...p, buyold: e.target.value }))}
-                  disabled={prices?.buyDisabled}
-                />
-                <Input
-                  label={t("dashboard.buynew")}
-                  value={prices?.buynew ?? ""}
-                  onChange={(e) => setPricesState((p) => ({ ...p, buynew: e.target.value }))}
-                  disabled={prices?.buyDisabled}
-                />
-              </div>
-            </div>
-
-            <SaveButton disabled={saving} type="submit" variant="success">
-              {saving ? "..." : t("dashboard.save")}
-            </SaveButton>
-          </form>
-        </CardBody>
-      </Card>
+      <ExchangeRatesManager />
 
       {/* Modals */}
       <AddCurrencyModal

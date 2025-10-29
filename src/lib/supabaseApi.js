@@ -99,27 +99,25 @@ export async function getWallets() {
 }
 
 export async function createWallet(payload) {
-  const { name, usd = 0, lyd = 0, currencies = {} } = payload
+  const { name, currencies = {} } = payload
 
   try {
     // Use prepareNewEntity to add UUID and created_at
     const walletData = prepareNewEntity({
       name,
-      usd,
-      lyd,
+      is_treasury: false,
     })
 
     // Create the wallet first
-    const { data, error } = await supabase.from("wallets").insert(walletData).select("id, name, usd, lyd").single()
+    const { data, error } = await supabase.from("wallets").insert(walletData).select("id, name, is_treasury").single()
 
     if (error) throw error
 
-    // Now add any additional currencies
     const walletCurrencies = []
 
-    // Skip USD and LYD as they're stored in the legacy fields
+    // Add all currencies from the currencies object
     for (const code in currencies) {
-      if (code !== "USD" && code !== "LYD" && currencies[code] > 0) {
+      if (currencies[code] !== 0 && currencies[code] !== null && currencies[code] !== undefined) {
         walletCurrencies.push({
           wallet_id: data.id,
           currency_code: code,
@@ -128,7 +126,23 @@ export async function createWallet(payload) {
       }
     }
 
-    // Insert additional currencies if any
+    // If no currencies provided, add USD and LYD with 0 balance as defaults
+    if (walletCurrencies.length === 0) {
+      walletCurrencies.push(
+        {
+          wallet_id: data.id,
+          currency_code: "USD",
+          balance: 0,
+        },
+        {
+          wallet_id: data.id,
+          currency_code: "LYD",
+          balance: 0,
+        },
+      )
+    }
+
+    // Insert currencies
     if (walletCurrencies.length > 0) {
       const { error: currencyError } = await supabase.from("wallet_currencies").insert(walletCurrencies)
 
@@ -136,10 +150,15 @@ export async function createWallet(payload) {
     }
 
     // Return wallet with currencies
+    const currenciesObj = {}
+    walletCurrencies.forEach((c) => {
+      currenciesObj[c.currency_code] = c.balance
+    })
+
     return {
       wallet: {
         ...data,
-        currencies,
+        currencies: currenciesObj,
       },
     }
   } catch (error) {
