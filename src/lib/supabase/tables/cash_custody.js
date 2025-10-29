@@ -153,7 +153,7 @@ export async function getAllCashCustody() {
         // Fetch all relevant wallets in a single query
         const { data: wallets, error: walletsError } = await supabase
           .from("wallets")
-          .select("id, name, usd, lyd")
+          .select("id, name")
           .in("id", Array.from(walletIds))
 
         if (!walletsError && wallets) {

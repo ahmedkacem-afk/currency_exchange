@@ -3,8 +3,7 @@ import ReactDOM from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import App from './App.jsx'
 import './styles.css'
-import { runMigrations } from './lib/migrations.js'
-import { initializeDatabase, validateAndUpdateSchema } from './lib/schema-manager.js'
+// Removed automatic migrations and schema manager initialization
 import { supabase } from './lib/supabase.js'
 import SupabaseConnectionError from './components/SupabaseConnectionError.jsx'
 
@@ -21,7 +20,7 @@ if (!supabaseUrl || !supabaseKey) {
     </React.StrictMode>,
   )
 } else {
-  // Initialize the app with schema checks and migrations
+  // Initialize the app (skip automatic migrations/schema manipulation)
   async function initializeApp() {
     try {
       console.log('Connecting to Supabase...');
@@ -35,22 +34,7 @@ if (!supabaseUrl || !supabaseKey) {
       
       console.log('Connected to Supabase successfully')
       
-      // Initialize database with required tables
-      console.log('Initializing database schema...')
-      const dbInitialized = await initializeDatabase()
-      if (!dbInitialized) {
-        console.warn('Database initialization had some issues, but we will continue')
-      }
-      
-      // Validate and update schema if needed
-      console.log('Validating database schema...')
-      await validateAndUpdateSchema()
-      
-      // Run any pending database migrations
-      console.log('Running migrations...')
-      await runMigrations()
-      
-      console.log('Database setup completed successfully!')
+      console.log('Skipping automatic migrations and schema manager. App will use existing schema.')
     } catch (error) {
       console.error('Failed to initialize app:', error)
       

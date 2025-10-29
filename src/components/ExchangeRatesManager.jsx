@@ -12,6 +12,7 @@ import Input from "./Input.jsx"
 import SaveButton from "./SaveButton.jsx"
 import { useToast } from "./Toast.jsx"
 import * as exchangeRatesApi from "../lib/supabase/tables/exchange_rates"
+import { getAllCurrencyTypes } from "../lib/supabase/tables/currency_types"
 
 export default function ExchangeRatesManager() {
   const { t } = useI18n()
@@ -28,11 +29,36 @@ export default function ExchangeRatesManager() {
   const loadRates = async () => {
     try {
       setLoading(true)
-      const data = await exchangeRatesApi.getExchangeRates()
-      setRates(data)
-      // Initialize editing state
+      const [rateRows, currencyTypes] = await Promise.all([
+        exchangeRatesApi.getExchangeRates(),
+        getAllCurrencyTypes().catch(() => []),
+      ])
+
+      // Build a superset of currency codes from currency_types and existing rates
+      const codes = new Set([...(rateRows || []).map((r) => r.currency_code), ...(currencyTypes || []).map((c) => c.code)])
+
+      // Ensure USD and LYD exist
+      codes.add("USD")
+      codes.add("LYD")
+
+      // Create a merged list ensuring every code appears at least with defaults
+      const merged = Array.from(codes)
+        .sort()
+        .map((code) => {
+          const existing = rateRows.find((r) => r.currency_code === code)
+          if (existing) return existing
+          return {
+            currency_code: code,
+            rate_to_usd: code === "USD" ? 1 : 0,
+            rate_to_lyd: code === "LYD" ? 1 : 0,
+          }
+        })
+
+      setRates(merged)
+
+      // Initialize editing state for all merged rows
       const initialEditing = {}
-      data.forEach((rate) => {
+      merged.forEach((rate) => {
         initialEditing[rate.currency_code] = {
           rate_to_usd: rate.rate_to_usd,
           rate_to_lyd: rate.rate_to_lyd,
@@ -61,7 +87,13 @@ export default function ExchangeRatesManager() {
     try {
       setSaving(true)
       const edited = editingRates[currencyCode]
-      await exchangeRatesApi.updateExchangeRate(currencyCode, edited.rate_to_usd, edited.rate_to_lyd)
+      // Decide to create or update based on whether it exists in rates state
+      const exists = rates.some((r) => r.currency_code === currencyCode && r.id !== undefined)
+      if (exists) {
+        await exchangeRatesApi.updateExchangeRate(currencyCode, edited.rate_to_usd, edited.rate_to_lyd)
+      } else {
+        await exchangeRatesApi.createExchangeRate(currencyCode, edited.rate_to_usd, edited.rate_to_lyd)
+      }
 
       // Update local state
       setRates(

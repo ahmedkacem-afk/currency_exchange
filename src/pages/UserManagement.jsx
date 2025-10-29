@@ -175,11 +175,56 @@ export default function UserManagement() {
                           )}
                         </td>
                         <td className="py-2 px-4 border-b">
-                          <RoleSelector
-                            userId={user.id}
-                            currentRoleId={user.role_id || (typeof user.role === 'object' ? user.role?.id : null)}
-                            onRoleChange={(roleId) => handleRoleChange(user.id, roleId)}
-                          />
+                          <div className="flex items-center gap-2">
+                            <RoleSelector
+                              userId={user.id}
+                              currentRoleId={user.role_id || (typeof user.role === 'object' ? user.role?.id : null)}
+                              onRoleChange={(roleId) => handleRoleChange(user.id, roleId)}
+                            />
+                            <Button
+                              variant="outline"
+                              onClick={async () => {
+                                const newName = prompt('Update name', `${user.first_name || ''} ${user.last_name || ''}`.trim());
+                                if (newName === null) return;
+                                const [first_name, ...rest] = newName.split(' ');
+                                const last_name = rest.join(' ');
+                                try {
+                                  const { error } = await supabase
+                                    .from('users')
+                                    .update({ first_name, last_name, name: newName })
+                                    .eq('id', user.id);
+                                  if (error) throw error;
+                                  setUsers(prev => prev.map(u => u.id === user.id ? { ...u, first_name, last_name, name: newName } : u));
+                                  show({ type: 'success', title: t('common.save'), message: t('userManagement.roleUpdated') });
+                                } catch (e) {
+                                  console.error('Update user failed:', e);
+                                  show({ type: 'error', title: t('common.failed'), message: e.message });
+                                }
+                              }}
+                            >
+                              Edit
+                            </Button>
+                            <Button
+                              variant="danger"
+                              onClick={async () => {
+                                if (!confirm('Delete this user? This removes the user profile.')) return;
+                                try {
+                                  const { error } = await supabase
+                                    .from('users')
+                                    .delete()
+                                    .eq('id', user.id);
+                                  if (error) throw error;
+                                  setUsers(prev => prev.filter(u => u.id !== user.id));
+                                  show({ type: 'success', title: t('common.delete'), message: 'User deleted' });
+                                } catch (e) {
+                                  console.error('Delete user failed:', e);
+                                  show({ type: 'error', title: t('common.failed'), message: e.message });
+                                }
+                              }}
+                            >
+                              {t('common.delete')}
+                            </Button>
+                          </div>
                         </td>
                       </tr>
                     ))}

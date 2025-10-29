@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { useI18n } from "../i18n/I18nProvider.jsx"
 import { getExchangeRates } from "../lib/supabase/tables/exchange_rates.js"
 import { Card, CardHeader, CardBody } from "../components/Card.jsx"
@@ -28,6 +28,8 @@ export default function DealershipExecutionerPage() {
   const [profiles, setProfiles] = useState({})
   const [wallets, setWallets] = useState({})
   const { show } = useToast()
+  const [refsLoaded, setRefsLoaded] = useState(false)
+  const [selectedIds, setSelectedIds] = useState(new Set())
 
   // Load reference data once (exchange rates, users, wallets)
   useEffect(() => {
@@ -64,6 +66,7 @@ export default function DealershipExecutionerPage() {
         usersData.forEach((user) => {
           userMap[user.id] = user.name || user.email
         })
+        setRefsLoaded(true)
       } catch (error) {
         console.error("Error loading reference data:", error)
         show("Failed to load reference data", "error")
@@ -71,7 +74,7 @@ export default function DealershipExecutionerPage() {
     }
 
     loadReferenceData()
-  }, [show, supabase])
+  }, [])
 
   useEffect(() => {
     async function loadTransactionData() {
@@ -148,8 +151,10 @@ export default function DealershipExecutionerPage() {
       }
     }
 
-    loadTransactionData()
-  }, [filter, show, supabase, profiles, wallets])
+    if (refsLoaded) {
+      loadTransactionData()
+    }
+  }, [filter, refsLoaded])
 
   const handleValidateTransaction = async (transactionId, decision, notes = "") => {
     try {
@@ -227,6 +232,58 @@ export default function DealershipExecutionerPage() {
 
     return matchesSearch
   })
+  const allSelected = useMemo(
+    () => selectedIds.size > 0 && selectedIds.size === filteredTransactions.length,
+    [selectedIds, filteredTransactions.length],
+  )
+
+  const toggleSelectAll = () => {
+    if (allSelected) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(filteredTransactions.map((t) => t.id)))
+    }
+  }
+
+  const toggleSelectOne = (id) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const handleDeleteSelected = async () => {
+    if (selectedIds.size === 0) return
+    if (!confirm(`Delete ${selectedIds.size} selected transaction(s)? This cannot be undone.`)) return
+    try {
+      const { error } = await supabase.from("transactions").delete().in("id", Array.from(selectedIds))
+      if (error) throw error
+      setTransactions((prev) => prev.filter((tx) => !selectedIds.has(tx.id)))
+      setSelectedIds(new Set())
+      show("Transactions deleted", "success")
+    } catch (e) {
+      console.error("Delete selected failed:", e)
+      show("Failed to delete selected transactions", "error")
+    }
+  }
+
+  const handleDeleteAll = async () => {
+    if (filteredTransactions.length === 0) return
+    if (!confirm(`Delete all ${filteredTransactions.length} transaction(s) in view? This cannot be undone.`)) return
+    try {
+      const ids = filteredTransactions.map((t) => t.id)
+      const { error } = await supabase.from("transactions").delete().in("id", ids)
+      if (error) throw error
+      setTransactions((prev) => prev.filter((tx) => !ids.includes(tx.id)))
+      setSelectedIds(new Set())
+      show("Transactions deleted", "success")
+    } catch (e) {
+      console.error("Delete all failed:", e)
+      show("Failed to delete transactions", "error")
+    }
+  }
 
   return (
     <>
@@ -318,12 +375,23 @@ export default function DealershipExecutionerPage() {
                       <option value="validated">{t("executioner.validated")}</option>
                     </select>
                   </div>
+                  <div className="flex items-center gap-2 ml-auto">
+                    <Button variant="outline" onClick={handleDeleteSelected} disabled={selectedIds.size === 0}>
+                      Delete selected
+                    </Button>
+                    <Button variant="danger" onClick={handleDeleteAll} disabled={filteredTransactions.length === 0}>
+                      Delete all in view
+                    </Button>
+                  </div>
                 </div>
 
                 <div className="overflow-x-auto">
                   <table className="min-w-full divide-y divide-gray-200">
                     <thead>
                       <tr>
+                        <th className="px-4 py-3">
+                          <input type="checkbox" checked={allSelected} onChange={toggleSelectAll} />
+                        </th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                           Type
                         </th>
@@ -354,6 +422,13 @@ export default function DealershipExecutionerPage() {
                       {filteredTransactions.length > 0 ? (
                         filteredTransactions.map((transaction) => (
                           <tr key={transaction.id}>
+                            <td className="px-4 py-3">
+                              <input
+                                type="checkbox"
+                                checked={selectedIds.has(transaction.id)}
+                                onChange={() => toggleSelectOne(transaction.id)}
+                              />
+                            </td>
                             <td className="px-4 py-3 whitespace-nowrap">
                               <span
                                 className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${

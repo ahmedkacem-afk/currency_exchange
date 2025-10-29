@@ -60,18 +60,9 @@ export default function WithdrawalsPage() {
     console.log('WithdrawalsPage - Selected wallet:', wallet, 'from wallets:', wallets);
     
     if (wallet) {
-      // Make sure the wallet has a currencies object
+      // Ensure currencies object exists
       if (!wallet.currencies) {
         wallet.currencies = {};
-        
-        // Add legacy USD/LYD if present
-        if (wallet.usd !== null && wallet.usd !== undefined) {
-          wallet.currencies.USD = Number(wallet.usd);
-        }
-        
-        if (wallet.lyd !== null && wallet.lyd !== undefined) {
-          wallet.currencies.LYD = Number(wallet.lyd);
-        }
       }
       
       console.log('WithdrawalsPage - Wallet currencies:', wallet.currencies);
@@ -106,18 +97,8 @@ export default function WithdrawalsPage() {
       if (res) {
         console.log('WithdrawalsPage - Withdrawal successful, updated wallet:', res);
         
-        // Make sure the wallet has a currencies object
         if (res && !res.currencies) {
           res.currencies = {};
-          
-          // Add legacy USD/LYD if present
-          if (res.usd !== null && res.usd !== undefined) {
-            res.currencies.USD = Number(res.usd);
-          }
-          
-          if (res.lyd !== null && res.lyd !== undefined) {
-            res.currencies.LYD = Number(res.lyd);
-          }
         }
         
         setSelectedWallet(res);
@@ -158,24 +139,9 @@ export default function WithdrawalsPage() {
     
     const currencies = [];
     
-    // Check legacy fields first
-    if (selectedWallet.usd !== null && selectedWallet.usd !== undefined && Number(selectedWallet.usd) > 0) {
-      currencies.push('USD');
-    }
-    
-    if (selectedWallet.lyd !== null && selectedWallet.lyd !== undefined && Number(selectedWallet.lyd) > 0) {
-      currencies.push('LYD');
-    }
-    
-    // Check currencies object
+    // Check currencies object only
     if (selectedWallet.currencies) {
       Object.entries(selectedWallet.currencies).forEach(([code, balance]) => {
-        // Don't double-add USD/LYD if they were already added from legacy fields
-        if ((code === 'USD' && selectedWallet.usd !== undefined) ||
-            (code === 'LYD' && selectedWallet.lyd !== undefined)) {
-          return;
-        }
-        
         if (Number(balance) > 0) {
           currencies.push(code);
         }
@@ -243,16 +209,10 @@ export default function WithdrawalsPage() {
               {selectedWallet && currencyCode && (
                 <div className="text-sm text-gray-600">
                   Available: {(() => {
-                    // Display the correct balance based on where it's stored
-                    if (currencyCode === 'USD' && selectedWallet.usd !== undefined) {
-                      return Number(selectedWallet.usd).toLocaleString();
-                    } else if (currencyCode === 'LYD' && selectedWallet.lyd !== undefined) {
-                      return Number(selectedWallet.lyd).toLocaleString();
-                    } else if (selectedWallet.currencies && selectedWallet.currencies[currencyCode] !== undefined) {
+                    if (selectedWallet.currencies && selectedWallet.currencies[currencyCode] !== undefined) {
                       return Number(selectedWallet.currencies[currencyCode]).toLocaleString();
-                    } else {
-                      return '0';
                     }
+                    return '0';
                   })()} {currencyCode}
                 </div>
               )}

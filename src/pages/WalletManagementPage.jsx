@@ -7,7 +7,8 @@ import { useAuth } from '../lib/AuthContext';
 import { supabase } from '../lib/supabase';
 import CurrencySelect from '../components/CurrencySelect';
 import { getWallets } from '../lib/api';
-import { addFundsToWallet } from '../lib/wallet_management';
+import AddFundsModal from '../components/AddFundsModal';
+import CreateCurrencyTypeModal from '../components/CreateCurrencyTypeModal';
 
 /**
  * WalletManagementPage Component
@@ -24,6 +25,9 @@ export default function WalletManagementPage() {
   const [custodies, setCustodies] = useState([]);
   const [selectedCustody, setSelectedCustody] = useState('');
   const [custodyAnalysis, setCustodyAnalysis] = useState(null);
+  const [showAddFunds, setShowAddFunds] = useState(false);
+  const [showCreateCurrencyType, setShowCreateCurrencyType] = useState(false);
+  const [walletForModal, setWalletForModal] = useState(null);
   const { t } = useI18n();
   const { show } = useToast();
   const { user } = useAuth();
@@ -76,7 +80,16 @@ export default function WalletManagementPage() {
           allCustodies = [...(records.given || []), ...(records.received || [])];
         }
       }
-      setCustodies(allCustodies);
+      // De-duplicate by id to avoid duplicate keys in lists
+      const uniqueById = [];
+      const seen = new Set();
+      for (const c of allCustodies) {
+        if (c && c.id && !seen.has(c.id)) {
+          seen.add(c.id);
+          uniqueById.push(c);
+        }
+      }
+      setCustodies(uniqueById);
     } catch (error) {
       console.error('Error loading custodies:', error);
     }
@@ -94,53 +107,8 @@ export default function WalletManagementPage() {
     }
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    
-    if (!selectedWallet || !amount || !currency || parseFloat(amount) <= 0) {
-      show({
-        type: 'error',
-        title: t('common.error'),
-        message: t('walletManagement.fillAllFields')
-      });
-      return;
-    }
-
-    try {
-      setSubmitting(true);
-
-      // Use the addFundsToWallet function from wallet_management.js to add funds
-      // This function updates the wallet balance and creates a validated transaction
-      const result = await addFundsToWallet(selectedWallet, currency, parseFloat(amount));
-      
-      if (!result.success) {
-        throw new Error(result.error || t('walletManagement.errorAddingFunds'));
-      }
-
-      // Show success message
-      show({
-        type: 'success',
-        title: t('walletManagement.success'),
-        message: t('walletManagement.fundsAddedSuccessfully')
-      });
-
-      // Reset form
-      setSelectedWallet('');
-      setAmount('');
-      setCurrency('');
-      
-      // Reload wallets to show updated balances
-      await loadWallets();
-    } catch (error) {
-      console.error('Error adding funds to wallet:', error);
-      show({
-        type: 'error',
-        title: t('walletManagement.errorAddingFunds'),
-        message: error.message
-      });
-    } finally {
-      setSubmitting(false);
-    }
+  const handleWalletsRefetch = async () => {
+    await loadWallets();
   };
 
   return (
@@ -199,60 +167,79 @@ export default function WalletManagementPage() {
         </div>
       </Card>
 
-      {/* ...existing code for wallet management... */}
+      {/* Wallets list with actions */}
       <Card className="mb-8">
         <div className="p-6">
-          <h2 className="text-xl font-semibold mb-4">{t('walletManagement.addFunds')}</h2>
-          <form onSubmit={handleSubmit}>
-            <div className="mb-4">
-              <label className="block text-sm mb-2">{t('walletManagement.selectWallet')}</label>
-              <select
-                value={selectedWallet}
-                onChange={(e) => setSelectedWallet(e.target.value)}
-                className="w-full border border-gray-300 rounded px-3 py-2"
-                disabled={submitting}
-              >
-                <option value="">{t('common.selectOption')}</option>
-                {wallets.map((wallet) => (
-                  <option key={wallet.id} value={wallet.id}>
-                    {wallet.name}
-                  </option>
-                ))}
-              </select>
+          <h2 className="text-xl font-semibold mb-4">{t('walletManagement.walletList')}</h2>
+          {loading ? (
+            <div className="text-gray-500">{t('cashier.processing')}</div>
+          ) : wallets.length === 0 ? (
+            <div className="text-gray-500">{t('walletManagement.noWallets')}</div>
+          ) : (
+            <div className="space-y-3">
+              {wallets.map((wallet) => (
+                <div key={wallet.id} className="border rounded p-3 flex items-center justify-between">
+                  <div>
+                    <div className="font-medium">{wallet.name}</div>
+                    <div className="text-xs text-gray-600 mt-1 flex flex-wrap gap-2">
+                      {wallet.currencies && Object.keys(wallet.currencies).length > 0 ? (
+                        Object.entries(wallet.currencies).map(([code, bal]) => (
+                          <span key={code} className="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-100 rounded">
+                            <span className="font-mono">{code}</span>
+                            <span className="text-gray-700">{Number(bal).toLocaleString()}</span>
+                          </span>
+                        ))
+                      ) : (
+                        <span className="text-gray-400">{t('walletManagement.noBalances')}</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button variant="secondary" onClick={() => { setWalletForModal(wallet); setShowAddFunds(true); }}>
+                      {t('walletManagement.addFunds')}
+                    </Button>
+                    <Button variant="outline" onClick={() => { setShowCreateCurrencyType(true); }}>
+                      {t('create.currencyType')}
+                    </Button>
+                    <Button
+                      variant="danger"
+                      onClick={async () => {
+                        if (!confirm('Delete this wallet? This action cannot be undone.')) return;
+                        try {
+                          const { deleteWallet } = await import('../lib/supabase/tables/wallets');
+                          await deleteWallet(wallet.id);
+                          await loadWallets();
+                          show({ type: 'success', title: t('walletManagement.success'), message: 'Wallet deleted' });
+                        } catch (e) {
+                          console.error('Delete wallet failed:', e);
+                          show({ type: 'error', title: t('walletManagement.errorLoadingWallets'), message: e.message });
+                        }
+                      }}
+                    >
+                      {t('common.delete')}
+                    </Button>
+                  </div>
+                </div>
+              ))}
             </div>
-
-            <div className="mb-4">
-              <label className="block text-sm mb-2">{t('walletManagement.selectCurrency')}</label>
-              <CurrencySelect 
-                value={currency} 
-                onChange={setCurrency} 
-                disabled={submitting}
-              />
-            </div>
-
-            <div className="mb-6">
-              <label className="block text-sm mb-2">{t('walletManagement.amount')}</label>
-              <input
-                type="number"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                className="w-full border border-gray-300 rounded px-3 py-2"
-                step="0.01"
-                min="0"
-                disabled={submitting}
-              />
-            </div>
-
-            <Button
-              type="submit"
-              className="bg-blue-600 hover:bg-blue-700 text-white"
-              disabled={submitting}
-            >
-              {submitting ? t('common.saving') : t('walletManagement.addFunds')}
-            </Button>
-          </form>
+          )}
         </div>
       </Card>
+
+
+      {/* Modals */}
+      <AddFundsModal
+        isOpen={showAddFunds}
+        onClose={() => setShowAddFunds(false)}
+        wallet={walletForModal}
+        onSuccess={async () => { setShowAddFunds(false); setWalletForModal(null); await handleWalletsRefetch(); }}
+      />
+
+      <CreateCurrencyTypeModal
+        isOpen={showCreateCurrencyType}
+        onClose={() => setShowCreateCurrencyType(false)}
+        onSuccess={() => setShowCreateCurrencyType(false)}
+      />
     </div>
   );
 }

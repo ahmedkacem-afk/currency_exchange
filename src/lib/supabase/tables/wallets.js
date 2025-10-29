@@ -135,25 +135,11 @@ export async function getWallets() {
     // Get custody totals for all wallets
     const custodyTotals = calculateCustodyTotalsByWallet(enhancedCustodyRecords, wallets)
 
-    // Initialize all wallets with their legacy currencies
-    let walletsWithCurrencies = wallets.map((wallet) => {
-      // Create initial currencies object with legacy fields
-      const currencies = {}
-
-      // Add USD and LYD from the legacy fields
-      if (wallet.usd !== null && wallet.usd !== undefined) {
-        currencies.USD = Number(wallet.usd)
-      }
-
-      if (wallet.lyd !== null && wallet.lyd !== undefined) {
-        currencies.LYD = Number(wallet.lyd)
-      }
-
-      return {
-        ...wallet,
-        currencies,
-      }
-    })
+    // Initialize all wallets with empty currencies (to be filled from wallet_currencies)
+    let walletsWithCurrencies = wallets.map((wallet) => ({
+      ...wallet,
+      currencies: {},
+    }))
 
     try {
       // Try to get currencies from the wallet_currencies table
@@ -185,9 +171,8 @@ export async function getWallets() {
         console.log("Wallets API: No additional currencies found or wallet_currencies table not available")
       }
     } catch (currencyError) {
-      // If there's an error fetching currencies (e.g., table doesn't exist),
-      // just continue with the legacy fields
-      console.warn("Wallets API: Error fetching wallet currencies (continuing with legacy fields):", currencyError)
+      // If there's an error fetching currencies, log and continue
+      console.warn("Wallets API: Error fetching wallet currencies:", currencyError)
     }
 
     // Add custody information to each wallet
@@ -523,42 +508,21 @@ export async function getWalletsSummary() {
       return { totalUsd: 0, totalLyd: 0, count: 0, currencyTotals: {} }
     }
 
-    // Calculate totals for all currencies
+    // Calculate totals for all currencies from wallet_currencies-derived data
     const currencyTotals = {}
     let totalUsd = 0
     let totalLyd = 0
 
-    // Process each wallet
     wallets.forEach((wallet) => {
-      // Add legacy USD/LYD fields
-      if (wallet.usd !== null && wallet.usd !== undefined) {
-        totalUsd += Number(wallet.usd)
-        // Also add to currency totals
-        currencyTotals.USD = (currencyTotals.USD || 0) + Number(wallet.usd)
-      }
-
-      if (wallet.lyd !== null && wallet.lyd !== undefined) {
-        totalLyd += Number(wallet.lyd)
-        // Also add to currency totals
-        currencyTotals.LYD = (currencyTotals.LYD || 0) + Number(wallet.lyd)
-      }
-
-      // Process currencies object
       if (wallet.currencies) {
         Object.entries(wallet.currencies).forEach(([code, balance]) => {
-          // Skip USD/LYD if they were already counted from legacy fields
-          if (code === "USD" && wallet.usd !== undefined) return
-          if (code === "LYD" && wallet.lyd !== undefined) return
-
-          // Add to totals
           currencyTotals[code] = (currencyTotals[code] || 0) + Number(balance)
-
-          // Add USD/LYD to their respective legacy totals
-          if (code === "USD") totalUsd += Number(balance)
-          if (code === "LYD") totalLyd += Number(balance)
         })
       }
     })
+
+    totalUsd = currencyTotals.USD || 0
+    totalLyd = currencyTotals.LYD || 0
 
     const count = wallets.length
 

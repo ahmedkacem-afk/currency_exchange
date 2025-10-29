@@ -38,32 +38,19 @@ export async function logout() {
 export async function getWallets() {
   console.log("Fetching wallets from Supabase")
   try {
-    // Get wallets with legacy fields
+    // Get wallets
     const { data: wallets, error } = await supabase
       .from("wallets")
-      .select("id, name, usd, lyd")
+      .select("id, name")
       .order("name", { ascending: true })
 
     if (error) throw error
 
-    // Initialize walletsWithCurrencies with just the legacy fields
-    const walletsWithCurrencies = wallets.map((wallet) => {
-      const currencies = {}
-
-      // Add legacy USD and LYD to currencies object if they exist
-      if (wallet.usd !== null && wallet.usd !== undefined) {
-        currencies.USD = Number(wallet.usd) || 0
-      }
-
-      if (wallet.lyd !== null && wallet.lyd !== undefined) {
-        currencies.LYD = Number(wallet.lyd) || 0
-      }
-
-      return {
-        ...wallet,
-        currencies,
-      }
-    })
+    // Initialize walletsWithCurrencies without legacy fields
+    const walletsWithCurrencies = wallets.map((wallet) => ({
+      ...wallet,
+      currencies: {},
+    }))
 
     try {
       // Try to get all wallet currencies - this may fail if table doesn't exist yet
@@ -87,7 +74,7 @@ export async function getWallets() {
       }
     } catch (currenciesError) {
       // If wallet_currencies table doesn't exist yet, just continue with legacy fields
-      console.warn("Could not fetch wallet currencies, continuing with legacy fields only:", currenciesError)
+      console.warn("Could not fetch wallet currencies:", currenciesError)
     }
 
     console.log("Wallets fetched successfully with currencies:", walletsWithCurrencies)
@@ -170,20 +157,10 @@ export async function createWallet(payload) {
 // Summary and statistics
 export async function getSummary() {
   try {
-    // Get legacy USD and LYD totals
-    const { data: wallets, error } = await supabase.from("wallets").select("id, usd, lyd")
-
-    if (error) throw error
-
-    // Calculate legacy USD and LYD totals
-    const totalUsd = wallets.reduce((sum, wallet) => sum + Number(wallet.usd || 0), 0)
-    const totalLyd = wallets.reduce((sum, wallet) => sum + Number(wallet.lyd || 0), 0)
-
-    // Initialize currency totals with legacy currencies
-    const currencyTotals = {
-      USD: totalUsd,
-      LYD: totalLyd,
-    }
+    // Initialize totals
+    const currencyTotals = {}
+    let totalUsd = 0
+    let totalLyd = 0
 
     try {
       // Try to get all wallet currencies - this may fail if table doesn't exist yet
@@ -202,13 +179,12 @@ export async function getSummary() {
           currencyTotals[code] += balance
         })
 
-        // Use the higher value if both exist in legacy and currency tables
-        currencyTotals.USD = Math.max(currencyTotals.USD || 0, totalUsd)
-        currencyTotals.LYD = Math.max(currencyTotals.LYD || 0, totalLyd)
+        // Derive totals for USD/LYD from currencyTotals
+        totalUsd = currencyTotals.USD || 0
+        totalLyd = currencyTotals.LYD || 0
       }
     } catch (currenciesError) {
-      // If wallet_currencies table doesn't exist yet, just continue with legacy fields
-      console.warn("Could not fetch wallet currencies, continuing with legacy totals only:", currenciesError)
+      console.warn("Could not fetch wallet currencies:", currenciesError)
     }
 
     return {
@@ -260,7 +236,7 @@ export async function getWalletStats(walletId) {
   // Get wallet info
   const { data: wallet, error: walletError } = await supabase
     .from("wallets")
-    .select("id, name, usd, lyd")
+    .select("id, name")
     .eq("id", walletId)
     .single()
 

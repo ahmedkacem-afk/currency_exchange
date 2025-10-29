@@ -34,11 +34,7 @@ export default function AddCurrencyModal({ isOpen, onClose, wallet, onSuccess })
     
     const excluded = {};
     
-    // Exclude currencies that already exist in the wallet
-    // From both legacy fields and currencies object
-    if (wallet.usd !== undefined) excluded.USD = true;
-    if (wallet.lyd !== undefined) excluded.LYD = true;
-    
+    // Exclude currencies that already exist in the wallet (from currencies object)
     if (wallet.currencies) {
       Object.keys(wallet.currencies).forEach(code => {
         excluded[code] = true;

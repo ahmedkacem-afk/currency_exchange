@@ -21,6 +21,10 @@ const strings = {
       account: "Account",
       menu: "Menu",
     },
+    sidebar: {
+      collapse: "Collapse sidebar",
+      expand: "Expand sidebar",
+    },
     // Flattened keys for convenience
     "userManagement.title": "User Management",
     "userManagement.users": "Users",
@@ -231,6 +235,11 @@ const strings = {
       currency: "Currency to withdraw",
       amount: "Amount to withdraw",
     },
+    unauthorized: {
+      title: "Access Denied",
+      message: "You don't have permission to access this page.",
+      backHome: "Back to Dashboard",
+    },
     updatePassword: {
       title: "Change Password",
       newPassword: "New Password",
@@ -287,6 +296,11 @@ const strings = {
       title: "Dealership Executioner",
       subtitle: "Monitor and validate currency transactions",
       currentRates: "Current Exchange Rates",
+      currentExchangeRates: "Current Exchange Rates",
+      currency: "Currency",
+      toUSD: "to USD",
+      toLYD: "to LYD",
+      lastUpdated: "Last Updated",
       transactions: "Transaction Records",
       pending: "Pending Validation",
       completed: "Validated",
@@ -403,6 +417,7 @@ const strings = {
       walletList: "Wallet List",
       noWallets: "No wallets found",
       selectCurrency: "Select Currency",
+      selectCustody: "Select Custody",
       fillAllFields: "Please fill all required fields",
       invalidAmount: "Please enter a valid amount",
       processing: "Processing...",
@@ -501,6 +516,10 @@ const strings = {
       logout: "تسجيل الخروج",
       account: "الحساب",
       menu: "القائمة",
+    },
+    sidebar: {
+      collapse: "طي الشريط الجانبي",
+      expand: "توسيع الشريط الجانبي",
     },
     // Flattened keys for Arabic
     "userManagement.title": "إدارة المستخدمين",
@@ -712,6 +731,11 @@ const strings = {
       currency: "العملة المراد سحبها",
       amount: "المبلغ المراد سحبه",
     },
+    unauthorized: {
+      title: "تم رفض الوصول",
+      message: "ليس لديك إذن للوصول إلى هذه الصفحة.",
+      backHome: "العودة إلى لوحة التحكم",
+    },
     updatePassword: {
       title: "تغيير كلمة المرور",
       newPassword: "كلمة المرور الجديدة",
@@ -767,6 +791,11 @@ const strings = {
     executioner: {
       title: "منفذ الصفقات",
       subtitle: "مراقبة وتصديق معاملات العملات",
+      currentExchangeRates: "أسعار الصرف الحالية",
+      currency: "العملة",
+      toUSD: "إلى الدولار",
+      toLYD: "إلى الدينار",
+      lastUpdated: "آخر تحديث",
       currentRates: "أسعار الصرف الحالية",
       transactions: "سجلات المعاملات",
       pending: "بانتظار التصديق",
@@ -879,6 +908,7 @@ const strings = {
       walletList: "قائمة المحافظ",
       noWallets: "لا توجد محافظ",
       selectCurrency: "اختر العملة",
+      selectCustody: "اختر العهدة",
       fillAllFields: "الرجاء تعبئة جميع الحقول المطلوبة",
       invalidAmount: "الرجاء إدخال مبلغ صحيح",
       processing: "جاري المعالجة...",
