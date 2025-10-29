@@ -153,7 +153,7 @@ export async function getAllCashCustody() {
         // Fetch all relevant wallets in a single query
         const { data: wallets, error: walletsError } = await supabase
           .from("wallets")
-          .select("id, name")
+          .select("id, name, usd, lyd")
           .in("id", Array.from(walletIds))
 
         if (!walletsError && wallets) {
@@ -450,30 +450,33 @@ export async function getCashiers() {
       throw error
     }
 
-    // Filter users who have the cashier role
-    // First, try to get cashier role ID if available
+    // First, try to get cashier and manager role IDs if available
     let cashierRoleId = null
+    let managerRoleId = null
     try {
       const { data: roleData, error: roleError } = await supabase
         .from("roles")
-        .select("id")
-        .eq("name", "cashier")
-        .single()
+        .select("id, name")
+        .in("name", ["cashier", "manager"])
 
       if (!roleError && roleData) {
-        cashierRoleId = roleData.id
+        roleData.forEach((role) => {
+          if (role.name === "cashier") cashierRoleId = role.id
+          if (role.name === "manager") managerRoleId = role.id
+        })
       }
     } catch (e) {
-      console.warn("Cash Custody API: Could not get cashier role ID:", e)
+      console.warn("Cash Custody API: Could not get cashier/manager role IDs:", e)
     }
 
-    // Filter users with cashier role (check both direct role and role_id)
     const cashiers = data.filter(
       (user) =>
-        (user.role && user.role.toLowerCase() === "cashier") || (cashierRoleId && user.role_id === cashierRoleId),
+        (user.role && (user.role.toLowerCase() === "cashier" || user.role.toLowerCase() === "manager")) ||
+        (cashierRoleId && user.role_id === cashierRoleId) ||
+        (managerRoleId && user.role_id === managerRoleId),
     )
 
-    console.log(`Cash Custody API: Found ${cashiers.length} cashiers`)
+    console.log(`Cash Custody API: Found ${cashiers.length} cashiers and managers`)
     return cashiers
   } catch (error) {
     console.error("Cash Custody API: Error in getCashiers:", error)
@@ -658,16 +661,15 @@ export async function giveCashCustody(data) {
 
     const { data: cashierUser, error: cashierError } = await supabase
       .from("users")
-      .select("name, lastname")
+      .select("name")
       .eq("id", cashierId)
       .single()
 
     let cashierName = "Cashier"
     if (!cashierError && cashierUser) {
-      cashierName = `${cashierUser.name || ""}_${cashierUser.lastname || ""}`.replace(/_+$/, "")
+      cashierName = cashierUser.name || "Cashier"
     }
 
-    // Build custody name
     const custodyName = `${cashierName}_${currencyCode}`
 
     // Check if the cashier already has a custody record for this currency

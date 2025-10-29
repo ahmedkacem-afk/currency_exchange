@@ -175,21 +175,31 @@ export default function SellCurrencyPage() {
 
     try {
       // Import the transaction service
-      const { transactionService } = await import("../lib/transactionService")
+      const { transactionService, getWalletNameForTransaction, getCustodyNameForTransaction } = await import("../lib/transactionService")
 
-      const extractId = (value) => {
-        if (value.startsWith("wallet:") || value.startsWith("custody:")) {
-          return value.split(":")[1]
+      // Helper to resolve name from value
+      const resolveName = async (value) => {
+        if (!value || value === "client") return "Client"
+        if (value.startsWith("wallet:")) {
+          const id = value.split(":")[1]
+          return await getWalletNameForTransaction(id)
+        }
+        if (value.startsWith("custody:")) {
+          const id = value.split(":")[1]
+          return await getCustodyNameForTransaction(id)
         }
         return value
       }
 
+      const sourceName = await resolveName(formData.sourceWallet)
+      const destinationName = await resolveName(formData.destinationWallet)
+
       // Create a sell transaction (us selling to customer)
       const result = await transactionService.createSellTransaction({
         ...formData,
-        sourceWallet: extractId(formData.sourceWallet),
-        destinationWallet: extractId(formData.destinationWallet),
         total: Number.parseFloat(total),
+        source: sourceName,
+        destination: destinationName,
       })
 
       // Show success message

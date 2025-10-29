@@ -1,14 +1,9 @@
-import { 
-  createBuyTransaction, 
-  createSellTransaction 
-} from './supabase/tables/transactions.js';
-import { getAllCashCustody, giveCashCustody } from './supabase/tables/cash_custody.js';
-import { getWalletById, updateWalletCurrencyBalance, updateWalletCurrency } from './supabase/tables/wallets.js';
-import { getUserCustodyRecords, updateCustodyBalance } from './supabase/tables/custody.js';
-import { getAllUsers } from './supabase/tables/users.js';
-import { getAllRoles, getRoleByName } from './supabase/tables/roles.js';
-import { generateUUID } from './uuid.js';
-import supabase from './supabase/client.js';
+import { updateWalletCurrencyBalance } from "./supabase/tables/wallets.js"
+import { updateCustodyBalance } from "./supabase/tables/custody.js"
+import { getAllUsers } from "./supabase/tables/users.js"
+import { getRoleByName } from "./supabase/tables/roles.js"
+import { generateUUID } from "./uuid.js"
+import supabase from "./supabase/client.js"
 
 /**
  * Generate a guaranteed unique transaction ID
@@ -17,36 +12,88 @@ import supabase from './supabase/client.js';
  */
 function generateUniqueTransactionId() {
   // Get a base UUID
-  let uuid = generateUUID();
-  
+  let uuid = generateUUID()
+
   // Validate UUID is exactly 36 characters with proper format
-  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-  
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
   // If somehow the UUID isn't valid, create a properly formatted one manually
   if (!uuidRegex.test(uuid) || uuid.length !== 36) {
-    console.warn('Invalid UUID generated, creating manual replacement');
-    
+    console.warn("Invalid UUID generated, creating manual replacement")
+
     // Create a properly formatted UUID manually
     const segments = [
       Math.random().toString(16).substring(2, 10),
       Math.random().toString(16).substring(2, 6),
-      '4' + Math.random().toString(16).substring(2, 5),
+      "4" + Math.random().toString(16).substring(2, 5),
       (8 + Math.floor(Math.random() * 4)).toString(16) + Math.random().toString(16).substring(2, 5),
-      Date.now().toString(16).substring(0, 12)
-    ];
-    
-    uuid = segments.join('-');
-    
+      Date.now().toString(16).substring(0, 12),
+    ]
+
+    uuid = segments.join("-")
+
     // Ensure the length is exactly 36 characters
     if (uuid.length < 36) {
-      uuid = uuid.padEnd(36, '0');
+      uuid = uuid.padEnd(36, "0")
     } else if (uuid.length > 36) {
-      uuid = uuid.substring(0, 36);
+      uuid = uuid.substring(0, 36)
     }
   }
-  
-  console.log(`Generated transaction ID: ${uuid} (length: ${uuid.length})`);
-  return uuid;
+
+  console.log(`Generated transaction ID: ${uuid} (length: ${uuid.length})`)
+  return uuid
+}
+
+/**
+ * Helper function to get custody name from custody ID
+ * Uses the custody.name field which is already formatted as user.name_currency_type
+ * @param {string} custodyId - The custody record ID
+ * @returns {Promise<string>} - Formatted custody name
+ */
+export async function getCustodyNameForTransaction(custodyId) {
+  try {
+    if (!custodyId) return "Custody"
+
+    const { data: custodyData, error } = await supabase
+      .from("custody")
+      .select("id, name, currency_code")
+      .eq("id", custodyId)
+      .single()
+
+    if (error || !custodyData) {
+      console.warn(`Could not fetch custody ${custodyId}:`, error)
+      return `Custody_${custodyId}`
+    }
+
+    // Use the name field directly - it's already formatted as user.name_currency_type
+    return custodyData.name || `Custody_${custodyId}`
+  } catch (error) {
+    console.error("Error getting custody name:", error)
+    return `Custody_${custodyId}`
+  }
+}
+
+/**
+ * Helper function to get wallet name
+ * @param {string} walletId - The wallet ID
+ * @returns {Promise<string>} - Wallet name
+ */
+export async function getWalletNameForTransaction(walletId) {
+  try {
+    if (!walletId) return "Wallet"
+
+    const { data: walletData, error } = await supabase.from("wallets").select("name").eq("id", walletId).single()
+
+    if (error || !walletData) {
+      console.warn(`Could not fetch wallet ${walletId}:`, error)
+      return `Wallet_${walletId}`
+    }
+
+    return walletData.name
+  } catch (error) {
+    console.error("Error getting wallet name:", error)
+    return `Wallet_${walletId}`
+  }
 }
 
 /**
@@ -55,7 +102,7 @@ function generateUniqueTransactionId() {
 export const transactionService = {
   /**
    * Creates a buy transaction (customer selling currency to us)
-   * 
+   *
    * @param {Object} data - Transaction data
    * @param {string} data.sourceWallet - Source wallet ID or special value ('client', 'custody:id')
    * @param {string} data.destinationWallet - Destination wallet ID or special value ('client', 'custody:id')
@@ -67,188 +114,133 @@ export const transactionService = {
    * @returns {Promise<Object>} - Transaction result
    */
   createBuyTransaction: async (data) => {
-    console.log('Creating buy transaction with data:', data);
+    console.log("Creating buy transaction with data:", data)
 
-    // Parse wallet types from values
-    const sourceType = data.sourceWallet ? data.sourceWallet.split(':')[0] : 'client';
-    const sourceId = data.sourceWallet ? data.sourceWallet.split(':')[1] || data.sourceWallet : null;
-    
-    const destinationType = data.destinationWallet ? data.destinationWallet.split(':')[0] : null;
-    const destinationId = data.destinationWallet ? data.destinationWallet.split(':')[1] || data.destinationWallet : null;
-    
-    console.log('Source:', sourceType, sourceId);
-    console.log('Destination:', destinationType, destinationId);
-    
-    // Get descriptive names for source and destination
-    let sourceName = 'Client';
-    let destinationName = 'Client';
-    
-    // Get wallet and custody descriptive names if needed
-    if (sourceType === 'wallet') {
-      // Get wallet name
-      const { data: walletData } = await supabase
-        .from('wallets')
-        .select('name')
-        .eq('id', sourceId)
-        .single();
-        
-      sourceName = walletData?.name || `Wallet (${sourceId})`;
-    } else if (sourceType === 'custody') {
-      // Get custody info with user name
-      if (sourceId && sourceId !== 'custody') {
-        const { data: custodyData } = await supabase
-          .from('cash_custody')
-          .select('id, currency_code')
-          .eq('id', sourceId)
-          .single();
-        
-        sourceName = custodyData 
-          ? `Custody_${custodyData.currency_code}`
-          : `Custody (${sourceId})`;
-      } else {
-        sourceName = 'Custody';
-      }
+    const sourceType = data.sourceWallet ? data.sourceWallet.split(":")[0] : "client"
+    const sourceId = data.sourceWallet ? data.sourceWallet.split(":")[1] || data.sourceWallet : null
+
+    const destinationType = data.destinationWallet ? data.destinationWallet.split(":")[0] : null
+    const destinationId = data.destinationWallet ? data.destinationWallet.split(":")[1] || data.destinationWallet : null
+
+    console.log("Source:", sourceType, sourceId)
+    console.log("Destination:", destinationType, destinationId)
+
+    let sourceName = "Client"
+    let destinationName = "Client"
+
+    if (sourceType === "wallet" && sourceId) {
+      sourceName = await getWalletNameForTransaction(sourceId)
+    } else if (sourceType === "custody" && sourceId) {
+      sourceName = await getCustodyNameForTransaction(sourceId)
     }
-    
-    if (destinationType === 'wallet') {
-      // Get wallet name
-      const { data: walletData } = await supabase
-        .from('wallets')
-        .select('name')
-        .eq('id', destinationId)
-        .single();
-        
-      destinationName = walletData?.name || `Wallet (${destinationId})`;
-    } else if (destinationType === 'custody') {
-      // Get custody info with user name
-      if (destinationId && destinationId !== 'custody') {
-        const { data: custodyData } = await supabase
-          .from('cash_custody')
-          .select('id, currency_code')
-          .eq('id', destinationId)
-          .single();
-        
-        destinationName = custodyData 
-          ? `Custody_${custodyData.currency_code}`
-          : `Custody (${destinationId})`;
-      } else {
-        destinationName = 'Custody';
-      }
+
+    if (destinationType === "wallet" && destinationId) {
+      destinationName = await getWalletNameForTransaction(destinationId)
+    } else if (destinationType === "custody" && destinationId) {
+      destinationName = await getCustodyNameForTransaction(destinationId)
     }
+
+    console.log("[v0] Source name:", sourceName, "Destination name:", destinationName)
 
     // Get current user session for cashier ID
-    const { data: sessionData } = await supabase.auth.getSession();
-    const user = sessionData?.session?.user;
-    
+    const { data: sessionData } = await supabase.auth.getSession()
+    const user = sessionData?.session?.user
+
     if (!user) {
-      throw new Error('User not authenticated');
+      throw new Error("User not authenticated")
     }
-    
-    // Create transaction record
+
     const transactionData = {
       id: generateUniqueTransactionId(),
-      type: 'buy',
-      walletid: destinationType === 'wallet' ? destinationId : null,
+      type: "buy",
+      walletid: destinationType === "wallet" ? destinationId : null,
       currency_code: data.receiveCurrencyCode,
-      amount: parseFloat(data.amount),
+      amount: Number.parseFloat(data.amount),
       exchange_currency_code: data.payCurrencyCode,
-      exchange_rate: parseFloat(data.price),
-      total_amount: parseFloat(data.total),
+      exchange_rate: Number.parseFloat(data.price),
+      total_amount: Number.parseFloat(data.total),
       client_name: data.clientName,
       cashier_id: user.id,
-      source: sourceName, // Use descriptive name instead of type
-      destination: destinationName, // Use descriptive name instead of type
-      createdat: Date.now() // Unix timestamp in milliseconds
-    };
-    
+      source: sourceName,
+      destination: destinationName,
+      createdat: Date.now(),
+    }
+
     // Insert transaction record
-    const { data: transaction, error } = await supabase
-      .from('transactions')
-      .insert(transactionData)
-      .select()
-      .single();
-    
-    if (error) throw error;
-    
-    // Handle custody-to-custody case first
-    if (sourceType === 'custody' && destinationType === 'custody') {
-      console.log('Custody to custody transfer');
-      
-      // Create transaction record first with descriptive names
-      const { data: transaction, error } = await supabase
-        .from('transactions')
-        .insert({
-          ...transactionData,
-          source: sourceName,
-          destination: destinationName
-        })
-        .select()
-        .single();
-      
-      if (error) throw error;
-      
-      // Deduct from source custody
-      await updateCustodyBalance(sourceId, -parseFloat(data.amount));
-      
-      // Add to destination custody
-      await updateCustodyBalance(destinationId, parseFloat(data.amount));
-      
-      return { transaction, source: sourceName, destination: destinationName };
+    const { data: transaction, error } = await supabase.from("transactions").insert(transactionData).select().single()
+
+    if (error) throw error
+
+    // Handle custody-to-custody case
+    if (sourceType === "custody" && destinationType === "custody") {
+      console.log("Custody to custody transfer")
+      await updateCustodyBalance(sourceId, -Number.parseFloat(data.amount))
+      await updateCustodyBalance(destinationId, Number.parseFloat(data.amount))
+      return { transaction, source: sourceName, destination: destinationName }
     }
-    
-    // Handle destination based on type
-    if (destinationType === 'custody') {
-      console.log('Updating custody record:', destinationId);
-      
-      if (destinationId) {
-        // Update existing custody record with the amount
-        await updateCustodyBalance(destinationId, parseFloat(data.amount));
-      } else {
-        // Check if the user already has a custody record for this currency
-        const { data: custodyRecords } = await getUserCustodyRecords();
-        const existingRecord = custodyRecords.find(r => r.currencyCode === data.receiveCurrencyCode);
-        
-        if (existingRecord) {
-          // Update the existing record
-          await updateCustodyBalance(existingRecord.id, parseFloat(data.amount));
-        } else {
-          // Create a new custody record for this user and currency
-          await supabase
-            .from('custody')
-            .insert({
-              user_id: user.id,
-              currency_code: data.receiveCurrencyCode,
-              amount: parseFloat(data.amount),
-              updated_at: new Date().toISOString()
-            });
-        }
-      }
-      
-      return { transaction, destination: 'custody' };
-    } 
-    else if (destinationType === 'wallet') {
-      console.log('Updating wallet:', destinationId);
-      
-      // Update the wallet with the amount
-      await updateWalletCurrencyBalance(
-        destinationId,
-        data.receiveCurrencyCode,
-        parseFloat(data.amount)
-      );
-      
-      return { transaction, destination: 'wallet' };
+
+    // Handle custody-to-wallet case
+    if (sourceType === "custody" && destinationType === "wallet") {
+      console.log("Custody to wallet transfer")
+      await updateCustodyBalance(sourceId, -Number.parseFloat(data.amount))
+      await updateWalletCurrencyBalance(destinationId, data.receiveCurrencyCode, Number.parseFloat(data.amount))
+      return { transaction, source: sourceName, destination: destinationName }
     }
-    
-    return { transaction, destination: 'client' };
-  }
-  
-  ,
+
+    // Handle custody-to-client case
+    if (sourceType === "custody" && !destinationType) {
+      console.log("Custody to client transfer")
+      await updateCustodyBalance(sourceId, -Number.parseFloat(data.amount))
+      return { transaction, source: sourceName, destination: destinationName }
+    }
+
+    // Handle wallet-to-custody case
+    if (sourceType === "wallet" && destinationType === "custody") {
+      console.log("Wallet to custody transfer")
+      await updateWalletCurrencyBalance(sourceId, data.receiveCurrencyCode, -Number.parseFloat(data.amount))
+      await updateCustodyBalance(destinationId, Number.parseFloat(data.amount))
+      return { transaction, source: sourceName, destination: destinationName }
+    }
+
+    // Handle wallet-to-wallet case
+    if (sourceType === "wallet" && destinationType === "wallet") {
+      console.log("Wallet to wallet transfer")
+      await updateWalletCurrencyBalance(sourceId, data.receiveCurrencyCode, -Number.parseFloat(data.amount))
+      await updateWalletCurrencyBalance(destinationId, data.receiveCurrencyCode, Number.parseFloat(data.amount))
+      return { transaction, source: sourceName, destination: destinationName }
+    }
+
+    // Handle wallet-to-client case
+    if (sourceType === "wallet" && !destinationType) {
+      console.log("Wallet to client transfer")
+      await updateWalletCurrencyBalance(sourceId, data.receiveCurrencyCode, -Number.parseFloat(data.amount))
+      return { transaction, source: sourceName, destination: destinationName }
+    }
+
+    // Handle client-to-custody case
+    if (!sourceType && destinationType === "custody") {
+      console.log("Client to custody transfer")
+      await updateCustodyBalance(destinationId, Number.parseFloat(data.amount))
+      return { transaction, source: sourceName, destination: destinationName }
+    }
+
+    // Handle client-to-wallet case
+    if (!sourceType && destinationType === "wallet") {
+      console.log("Client to wallet transfer")
+      await updateWalletCurrencyBalance(destinationId, data.receiveCurrencyCode, Number.parseFloat(data.amount))
+      return { transaction, source: sourceName, destination: destinationName }
+    }
+
+    // Handle client-to-client case (default)
+    console.log("Client to client transfer")
+    return { transaction, source: sourceName, destination: destinationName }
+  },
 
   /**
    * Creates a sell transaction (us selling currency to the customer)
-   * 
+   *
    * @param {Object} data - Transaction data
-   * @param {string} data.sourceWallet - Source wallet ID or special value ('client', 'custody')
+   * @param {string} data.sourceWallet - Source wallet ID or special value ('client', 'custody:id')
    * @param {string} data.sellCurrencyCode - Currency to sell to customer
    * @param {string} data.receiveCurrencyCode - Currency to receive from customer
    * @param {number} data.amount - Amount of currency to sell
@@ -257,504 +249,468 @@ export const transactionService = {
    * @returns {Promise<Object>} - Transaction result
    */
   createSellTransaction: async (data) => {
-    console.log('Creating sell transaction with data:', data);
+    console.log("Creating sell transaction with data:", data)
 
-    // Different logic based on source and destination wallets
-    // Parse wallet types from values
-    const sourceType = data.sourceWallet ? data.sourceWallet.split(':')[0] : 'client';
-    const sourceId = data.sourceWallet ? data.sourceWallet.split(':')[1] || data.sourceWallet : null;
-    
-    const destinationType = data.destinationWallet ? data.destinationWallet.split(':')[0] : 'client';
-    const destinationId = data.destinationWallet ? data.destinationWallet.split(':')[1] || data.destinationWallet : null;
-    
-    console.log('Source:', sourceType, sourceId);
-    console.log('Destination:', destinationType, destinationId);
-    
-    // Get descriptive names for source and destination
-    let sourceName = 'Client';
-    let destinationName = 'Client';
-    
-    // Get wallet and custody descriptive names if needed
-    if (sourceType === 'wallet') {
-      // Get wallet name
-      const { data: walletData } = await supabase
-        .from('wallets')
-        .select('name')
-        .eq('id', sourceId)
-        .single();
-        
-      sourceName = walletData?.name || `Wallet (${sourceId})`;
-    } else if (sourceType === 'custody') {
-      // Get custody info with user name
-      if (sourceId && sourceId !== 'custody') {
-        const { data: custodyData } = await supabase
-          .from('cash_custody')
-          .select('id, currency_code')
-          .eq('id', sourceId)
-          .single();
-        
-        sourceName = custodyData 
-          ? `Custody_${custodyData.currency_code}`
-          : `Custody (${sourceId})`;
-      } else {
-        sourceName = 'Custody';
-      }
+    const sourceType = data.sourceWallet ? data.sourceWallet.split(":")[0] : "client"
+    const sourceId = data.sourceWallet ? data.sourceWallet.split(":")[1] || data.sourceWallet : null
+
+    const destinationType = data.destinationWallet ? data.destinationWallet.split(":")[0] : "client"
+    const destinationId = data.destinationWallet ? data.destinationWallet.split(":")[1] || data.destinationWallet : null
+
+    console.log("Source:", sourceType, sourceId)
+    console.log("Destination:", destinationType, destinationId)
+
+    let sourceName = "Client"
+    let destinationName = "Client"
+
+    if (sourceType === "wallet" && sourceId) {
+      sourceName = await getWalletNameForTransaction(sourceId)
+    } else if (sourceType === "custody" && sourceId) {
+      sourceName = await getCustodyNameForTransaction(sourceId)
     }
-    
-    if (destinationType === 'wallet') {
-      // Get wallet name
-      const { data: walletData } = await supabase
-        .from('wallets')
-        .select('name')
-        .eq('id', destinationId)
-        .single();
-        
-      destinationName = walletData?.name || `Wallet (${destinationId})`;
-    } else if (destinationType === 'custody') {
-      // Get custody info with user name
-      if (destinationId && destinationId !== 'custody') {
-        const { data: custodyData } = await supabase
-          .from('cash_custody')
-          .select('id, currency_code')
-          .eq('id', destinationId)
-          .single();
-        
-        destinationName = custodyData 
-          ? `Custody_${custodyData.currency_code}`
-          : `Custody (${destinationId})`;
-      } else {
-        destinationName = 'Custody';
-      }
+
+    if (destinationType === "wallet" && destinationId) {
+      destinationName = await getWalletNameForTransaction(destinationId)
+    } else if (destinationType === "custody" && destinationId) {
+      destinationName = await getCustodyNameForTransaction(destinationId)
     }
-    
+
+    console.log("[v0] Source name:", sourceName, "Destination name:", destinationName)
+
+    // Get current user session for cashier ID
+    const { data: sessionData } = await supabase.auth.getSession()
+    const user = sessionData?.session?.user
+
+    if (!user) {
+      throw new Error("User not authenticated")
+    }
+
     // Handle custody-to-custody case
-    if (sourceType === 'custody' && destinationType === 'custody') {
-      console.log('Custody to custody transfer');
-      
-      // Get current user session for cashier ID
-      const { data: sessionData } = await supabase.auth.getSession();
-      const user = sessionData?.session?.user;
-      
-      if (!user) {
-        throw new Error('User not authenticated');
-      }
-      
-      // Create transaction record with descriptive names
+    if (sourceType === "custody" && destinationType === "custody") {
+      console.log("Custody to custody transfer")
+
       const transactionData = {
         id: generateUniqueTransactionId(),
-        type: 'transfer',
+        type: "transfer",
         walletid: null,
         currency_code: data.sellCurrencyCode,
-        amount: parseFloat(data.amount),
+        amount: Number.parseFloat(data.amount),
         exchange_currency_code: data.receiveCurrencyCode,
-        exchange_rate: parseFloat(data.price),
-        total_amount: parseFloat(data.total),
-        client_name: data.clientName || 'Internal Transfer',
+        exchange_rate: Number.parseFloat(data.price),
+        total_amount: Number.parseFloat(data.total),
+        client_name: data.clientName || "Internal Transfer",
         cashier_id: user.id,
         source: sourceName,
         destination: destinationName,
-        createdat: Date.now()
-      };
-      
-      // Insert transaction record
-      const { data: transaction, error } = await supabase
-        .from('transactions')
-        .insert(transactionData)
-        .select()
-        .single();
-      
-      if (error) throw error;
-      
-      // Update source custody (decrease amount)
-      await updateCustodyBalance(sourceId, -parseFloat(data.amount));
-      
-      // Update destination custody (increase amount)
-      await updateCustodyBalance(destinationId, parseFloat(data.amount));
-      
-      return { transaction, source: sourceName, destination: destinationName };
-    }
-    
-    if (sourceType === 'client') {
-      // Client to client case - just record the transaction without updating wallets
-      console.log('Client to client sell transaction');
-      
-      // Get current user session for cashier ID
-      const { data: sessionData } = await supabase.auth.getSession();
-      const user = sessionData?.session?.user;
-      
-      if (!user) {
-        throw new Error('User not authenticated');
+        createdat: Date.now(),
       }
-      
+
+      const { data: transaction, error } = await supabase.from("transactions").insert(transactionData).select().single()
+      if (error) throw error
+
+      await updateCustodyBalance(sourceId, -Number.parseFloat(data.amount))
+      await updateCustodyBalance(destinationId, Number.parseFloat(data.amount))
+
+      return { transaction, source: sourceName, destination: destinationName }
+    }
+
+    // Handle custody-to-wallet case
+    if (sourceType === "custody" && destinationType === "wallet") {
+      console.log("Custody to wallet transfer")
+
       const transactionData = {
-        id: generateUUID(),
-        type: 'sell',
-        walletid: null, // No wallet involved - lowercase as per actual schema
+        id: generateUniqueTransactionId(),
+        type: "sell",
+        walletid: destinationId,
         currency_code: data.sellCurrencyCode,
-        amount: parseFloat(data.amount),
+        amount: Number.parseFloat(data.amount),
         exchange_currency_code: data.receiveCurrencyCode,
-        exchange_rate: parseFloat(data.price),
-        total_amount: parseFloat(data.total),
-        client_name: data.clientName,
-        cashier_id: user.id, // Add cashier ID from logged-in user
-        source: sourceName, // Use descriptive name
-        destination: destinationName, // Use descriptive name
-        createdat: Date.now() // Unix timestamp in milliseconds
-      };
-
-      // Insert transaction record
-      const { data: transaction, error } = await supabase
-        .from('transactions')
-        .insert(transactionData)
-        .select()
-        .single();
-      
-      if (error) throw error;
-      
-      return { transaction, wallet: null };
-    }
-    else if (data.sourceWallet === 'custody') {
-      // Custody to client case - update custody records and create transaction
-      console.log('Custody to client sell transaction');
-      
-      // Get current user session
-      const { data: sessionData } = await supabase.auth.getSession();
-      const user = sessionData?.session?.user;
-      
-      if (!user) {
-        throw new Error('User not authenticated');
-      }
-
-      // Get all cash custody records for the current user
-      const custodyRecords = await getAllCashCustody();
-      
-      // Find active custody records for the currency being sold
-      const activeCustodyRecords = [
-        ...(custodyRecords.given || []), 
-        ...(custodyRecords.received || [])
-      ].filter(record => 
-        record.status === 'active' && 
-        record.currency_code === data.sellCurrencyCode &&
-        record.cashier_id === user.id
-      );
-      
-      // Check if there's enough in custody
-      const totalCustody = activeCustodyRecords.reduce(
-        (sum, record) => sum + parseFloat(record.amount), 0
-      );
-      
-      if (totalCustody < parseFloat(data.amount)) {
-        throw new Error(`Insufficient funds in custody: have ${totalCustody} ${data.sellCurrencyCode}, need ${data.amount}`);
-      }
-
-      // Create transaction record with descriptive names
-      const transactionData = {
-        id: generateUUID(),
-        type: 'sell',
-        walletid: null, // No wallet involved - lowercase as per actual schema
-        currency_code: data.sellCurrencyCode,
-        amount: parseFloat(data.amount),
-        exchange_currency_code: data.receiveCurrencyCode,
-        exchange_rate: parseFloat(data.price),
-        total_amount: parseFloat(data.total),
-        client_name: data.clientName,
-        cashier_id: user.id, // Add cashier ID from logged-in user
-        source: sourceName, // Use descriptive name
-        destination: destinationName, // Use descriptive name
-        createdat: Date.now() // Unix timestamp in milliseconds
-      };
-
-      const { data: transaction, error } = await supabase
-        .from('transactions')
-        .insert(transactionData)
-        .select()
-        .single();
-      
-      if (error) throw error;
-
-      // Reduce custody amount - this is simplified, in real-world you might want to track
-      // exactly which custody records are being reduced
-      let amountToReduce = parseFloat(data.amount);
-      
-      for (const record of activeCustodyRecords) {
-        if (amountToReduce <= 0) break;
-        
-        const recordAmount = parseFloat(record.amount);
-        const reduceBy = Math.min(recordAmount, amountToReduce);
-        
-        // Update custody record
-        if (reduceBy >= recordAmount) {
-          // Zero out this custody record (mark as used/returned)
-          await supabase
-            .from('cash_custody')
-            .update({ 
-              status: 'returned',
-              is_returned: true,
-              amount: 0,
-              updated_at: new Date().toISOString(),
-              return_notes: `Full amount sold to client ${data.clientName || 'Unknown'}`
-            })
-            .eq('id', record.id);
-        } else {
-          // Reduce this custody record
-          await supabase
-            .from('cash_custody')
-            .update({ 
-              amount: recordAmount - reduceBy,
-              updated_at: new Date().toISOString(),
-              notes: `${record.notes || ''} (Reduced by ${reduceBy} from sell to client ${data.clientName || 'Unknown'})`
-            })
-            .eq('id', record.id);
-        }
-        
-        amountToReduce -= reduceBy;
-      }
-      
-      return { transaction };
-    }
-    else if (data.destinationWallet === 'custody') {
-      // Wallet to custody case - transfer from wallet to custody
-      console.log('Wallet to custody sell transaction');
-      
-      // Get current user session
-      const { data: sessionData } = await supabase.auth.getSession();
-      const user = sessionData?.session?.user;
-      
-      if (!user) {
-        throw new Error('User not authenticated');
-      }
-      
-      // First perform the regular wallet transaction
-      const result = await createSellTransaction({
-        walletId: data.sourceWallet,
-        sellCurrencyCode: data.sellCurrencyCode,
-        sellAmount: parseFloat(data.amount),
-        receiveCurrencyCode: data.receiveCurrencyCode,
-        receiveAmount: parseFloat(data.total),
+        exchange_rate: Number.parseFloat(data.price),
+        total_amount: Number.parseFloat(data.total),
+        client_name: data.clientName || "Custody to Wallet Transfer",
         cashier_id: user.id,
         source: sourceName,
-        destination: destinationName
-      });
-      
-      // Then create custody record for the received currency
-      if (data.receiveCurrencyCode && data.total > 0) {
-        const custodyData = {
-          id: generateUUID(),
-          treasurer_id: user.id,
-          cashier_id: user.id,
-          currency_code: data.receiveCurrencyCode,
-          amount: parseFloat(data.total),
-          status: 'active', // Auto-approved
-          notes: `From wallet-to-custody sell transaction for client ${data.clientName || 'Unknown'}`
-        };
-        
-        await supabase.from('cash_custody').insert(custodyData);
+        destination: destinationName,
+        createdat: Date.now(),
       }
-      
-      return result;
+
+      const { data: transaction, error } = await supabase.from("transactions").insert(transactionData).select().single()
+      if (error) throw error
+
+      await updateCustodyBalance(sourceId, -Number.parseFloat(data.amount))
+      await updateWalletCurrencyBalance(destinationId, data.sellCurrencyCode, Number.parseFloat(data.amount))
+
+      return { transaction, source: sourceName, destination: destinationName }
     }
-    else {
-      // Normal wallet transaction
-      console.log('Normal wallet sell transaction');
-      
-      // Get current user session for cashier ID
-      const { data: sessionData } = await supabase.auth.getSession();
-      const user = sessionData?.session?.user;
-      
-      if (!user) {
-        throw new Error('User not authenticated');
-      }
-      
-      return await createSellTransaction({
-        walletId: data.sourceWallet,
-        sellCurrencyCode: data.sellCurrencyCode,
-        sellAmount: parseFloat(data.amount),
-        receiveCurrencyCode: data.receiveCurrencyCode,
-        receiveAmount: parseFloat(data.total),
+
+    // Handle custody-to-client case
+    if (sourceType === "custody" && destinationType === "client") {
+      console.log("Custody to client transfer")
+
+      const transactionData = {
+        id: generateUniqueTransactionId(),
+        type: "sell",
+        walletid: null,
+        currency_code: data.sellCurrencyCode,
+        amount: Number.parseFloat(data.amount),
+        exchange_currency_code: data.receiveCurrencyCode,
+        exchange_rate: Number.parseFloat(data.price),
+        total_amount: Number.parseFloat(data.total),
+        client_name: data.clientName,
         cashier_id: user.id,
-        source: sourceName, // Use descriptive name
-        destination: destinationName // Use descriptive name
-      });
+        source: sourceName,
+        destination: destinationName,
+        createdat: Date.now(),
+      }
+
+      const { data: transaction, error } = await supabase.from("transactions").insert(transactionData).select().single()
+      if (error) throw error
+
+      await updateCustodyBalance(sourceId, -Number.parseFloat(data.amount))
+
+      return { transaction, source: sourceName, destination: destinationName }
     }
+
+    // Handle wallet-to-custody case
+    if (sourceType === "wallet" && destinationType === "custody") {
+      console.log("Wallet to custody transfer")
+
+      const transactionData = {
+        id: generateUniqueTransactionId(),
+        type: "sell",
+        walletid: sourceId,
+        currency_code: data.sellCurrencyCode,
+        amount: Number.parseFloat(data.amount),
+        exchange_currency_code: data.receiveCurrencyCode,
+        exchange_rate: Number.parseFloat(data.price),
+        total_amount: Number.parseFloat(data.total),
+        client_name: data.clientName || "Wallet to Custody Transfer",
+        cashier_id: user.id,
+        source: sourceName,
+        destination: destinationName,
+        createdat: Date.now(),
+      }
+
+      const { data: transaction, error } = await supabase.from("transactions").insert(transactionData).select().single()
+      if (error) throw error
+
+      await updateWalletCurrencyBalance(sourceId, data.sellCurrencyCode, -Number.parseFloat(data.amount))
+      await updateCustodyBalance(destinationId, Number.parseFloat(data.amount))
+
+      return { transaction, source: sourceName, destination: destinationName }
+    }
+
+    // Handle wallet-to-wallet case
+    if (sourceType === "wallet" && destinationType === "wallet") {
+      console.log("Wallet to wallet transfer")
+
+      const transactionData = {
+        id: generateUniqueTransactionId(),
+        type: "sell",
+        walletid: sourceId,
+        currency_code: data.sellCurrencyCode,
+        amount: Number.parseFloat(data.amount),
+        exchange_currency_code: data.receiveCurrencyCode,
+        exchange_rate: Number.parseFloat(data.price),
+        total_amount: Number.parseFloat(data.total),
+        client_name: data.clientName || "Wallet to Wallet Transfer",
+        cashier_id: user.id,
+        source: sourceName,
+        destination: destinationName,
+        createdat: Date.now(),
+      }
+
+      const { data: transaction, error } = await supabase.from("transactions").insert(transactionData).select().single()
+      if (error) throw error
+
+      await updateWalletCurrencyBalance(sourceId, data.sellCurrencyCode, -Number.parseFloat(data.amount))
+      await updateWalletCurrencyBalance(destinationId, data.sellCurrencyCode, Number.parseFloat(data.amount))
+
+      return { transaction, source: sourceName, destination: destinationName }
+    }
+
+    // Handle wallet-to-client case
+    if (sourceType === "wallet" && destinationType === "client") {
+      console.log("Wallet to client transfer")
+
+      const transactionData = {
+        id: generateUniqueTransactionId(),
+        type: "sell",
+        walletid: sourceId,
+        currency_code: data.sellCurrencyCode,
+        amount: Number.parseFloat(data.amount),
+        exchange_currency_code: data.receiveCurrencyCode,
+        exchange_rate: Number.parseFloat(data.price),
+        total_amount: Number.parseFloat(data.total),
+        client_name: data.clientName,
+        cashier_id: user.id,
+        source: sourceName,
+        destination: destinationName,
+        createdat: Date.now(),
+      }
+
+      const { data: transaction, error } = await supabase.from("transactions").insert(transactionData).select().single()
+      if (error) throw error
+
+      await updateWalletCurrencyBalance(sourceId, data.sellCurrencyCode, -Number.parseFloat(data.amount))
+
+      return { transaction, source: sourceName, destination: destinationName }
+    }
+
+    // Handle client-to-custody case
+    if (sourceType === "client" && destinationType === "custody") {
+      console.log("Client to custody transfer")
+
+      const transactionData = {
+        id: generateUniqueTransactionId(),
+        type: "sell",
+        walletid: null,
+        currency_code: data.sellCurrencyCode,
+        amount: Number.parseFloat(data.amount),
+        exchange_currency_code: data.receiveCurrencyCode,
+        exchange_rate: Number.parseFloat(data.price),
+        total_amount: Number.parseFloat(data.total),
+        client_name: data.clientName,
+        cashier_id: user.id,
+        source: sourceName,
+        destination: destinationName,
+        createdat: Date.now(),
+      }
+
+      const { data: transaction, error } = await supabase.from("transactions").insert(transactionData).select().single()
+      if (error) throw error
+
+      await updateCustodyBalance(destinationId, Number.parseFloat(data.amount))
+
+      return { transaction, source: sourceName, destination: destinationName }
+    }
+
+    // Handle client-to-wallet case
+    if (sourceType === "client" && destinationType === "wallet") {
+      console.log("Client to wallet transfer")
+
+      const transactionData = {
+        id: generateUniqueTransactionId(),
+        type: "sell",
+        walletid: destinationId,
+        currency_code: data.sellCurrencyCode,
+        amount: Number.parseFloat(data.amount),
+        exchange_currency_code: data.receiveCurrencyCode,
+        exchange_rate: Number.parseFloat(data.price),
+        total_amount: Number.parseFloat(data.total),
+        client_name: data.clientName,
+        cashier_id: user.id,
+        source: sourceName,
+        destination: destinationName,
+        createdat: Date.now(),
+      }
+
+      const { data: transaction, error } = await supabase.from("transactions").insert(transactionData).select().single()
+      if (error) throw error
+
+      await updateWalletCurrencyBalance(destinationId, data.sellCurrencyCode, Number.parseFloat(data.amount))
+
+      return { transaction, source: sourceName, destination: destinationName }
+    }
+
+    // Handle client-to-client case (default)
+    console.log("Client to client transfer")
+
+    const transactionData = {
+      id: generateUniqueTransactionId(),
+      type: "sell",
+      walletid: null,
+      currency_code: data.sellCurrencyCode,
+      amount: Number.parseFloat(data.amount),
+      exchange_currency_code: data.receiveCurrencyCode,
+      exchange_rate: Number.parseFloat(data.price),
+      total_amount: Number.parseFloat(data.total),
+      client_name: data.clientName,
+      cashier_id: user.id,
+      source: sourceName,
+      destination: destinationName,
+      createdat: Date.now(),
+    }
+
+    const { data: transaction, error } = await supabase.from("transactions").insert(transactionData).select().single()
+    if (error) throw error
+
+    return { transaction, source: sourceName, destination: destinationName }
   },
 
   /**
-   * Get all cashiers for treasury management
-   * 
-   * This function extracts all users with the 'cashier' role in the system
-   * @returns {Promise<Array>} - List of cashier users with their details
+   * Get all cashiers and managers for treasury management
+   *
+   * This function extracts all users with the 'cashier' or 'manager' role in the system
+   * @returns {Promise<Array>} - List of cashier and manager users with their details
    */
   getAllCashiers: async () => {
     try {
-      console.log('TransactionService: Getting all cashiers...');
-      
+      console.log("TransactionService: Getting all cashiers and managers...")
+
       // Get all users first
-      const { users } = await getAllUsers({ limit: 100 });
-      
+      const { users } = await getAllUsers({ limit: 100 })
+
       if (!users || users.length === 0) {
-        console.warn('TransactionService: No users found');
-        return [];
+        console.warn("TransactionService: No users found")
+        return []
       }
-      
-      // Try to get the cashier role ID
-      let cashierRoleId = null;
+
+      // Try to get the cashier and manager role IDs
+      let cashierRoleId = null
+      let managerRoleId = null
       try {
-        const cashierRole = await getRoleByName('cashier');
-        cashierRoleId = cashierRole?.id;
+        const cashierRole = await getRoleByName("cashier")
+        cashierRoleId = cashierRole?.id
+        const managerRole = await getRoleByName("manager")
+        managerRoleId = managerRole?.id
       } catch (error) {
-        console.warn('TransactionService: Error getting cashier role by name:', error);
+        console.warn("TransactionService: Error getting role IDs:", error)
       }
-      
-      // Filter users who have cashier role
-      // Check both the legacy 'role' string and the newer 'role_id' reference
-      const cashiers = users.filter(user => {
-        return (
-          (user.role && user.role.toLowerCase() === 'cashier') || 
-          (cashierRoleId && user.role_id === cashierRoleId)
-        );
-      });
-      
-      console.log(`TransactionService: Found ${cashiers.length} cashiers`);
-      return cashiers;
+
+      const cashiersAndManagers = users.filter((user) => {
+        const isCashier =
+          (user.role && user.role.toLowerCase() === "cashier") || (cashierRoleId && user.role_id === cashierRoleId)
+        const isManager =
+          (user.role && user.role.toLowerCase() === "manager") || (managerRoleId && user.role_id === managerRoleId)
+        return isCashier || isManager
+      })
+
+      console.log(`TransactionService: Found ${cashiersAndManagers.length} cashiers and managers`)
+      return cashiersAndManagers
     } catch (error) {
-      console.error('TransactionService: Error getting cashiers:', error);
-      return [];
+      console.error("TransactionService: Error getting cashiers:", error)
+      return []
     }
   },
-  
+
   /**
    * Get all managers for treasury management
-   * 
+   *
    * This function extracts all users with the 'manager' role in the system
    * @returns {Promise<Array>} - List of manager users with their details
    */
   getAllManagers: async () => {
     try {
-      console.log('TransactionService: Getting all managers...');
-      
+      console.log("TransactionService: Getting all managers...")
+
       // Get all users first
-      const { users } = await getAllUsers({ limit: 100 });
-      
+      const { users } = await getAllUsers({ limit: 100 })
+
       if (!users || users.length === 0) {
-        console.warn('TransactionService: No users found');
-        return [];
+        console.warn("TransactionService: No users found")
+        return []
       }
-      
+
       // Try to get the manager role ID
-      let managerRoleId = null;
+      let managerRoleId = null
       try {
-        const managerRole = await getRoleByName('manager');
-        managerRoleId = managerRole?.id;
+        const managerRole = await getRoleByName("manager")
+        managerRoleId = managerRole?.id
       } catch (error) {
-        console.warn('TransactionService: Error getting manager role by name:', error);
+        console.warn("TransactionService: Error getting manager role by name:", error)
       }
-      
+
       // Filter users who have manager role
       // Check both the legacy 'role' string and the newer 'role_id' reference
-      const managers = users.filter(user => {
-        return (
-          (user.role && user.role.toLowerCase() === 'manager') || 
-          (managerRoleId && user.role_id === managerRoleId)
-        );
-      });
-      
-      console.log(`TransactionService: Found ${managers.length} managers`);
-      return managers;
+      const managers = users.filter((user) => {
+        return (user.role && user.role.toLowerCase() === "manager") || (managerRoleId && user.role_id === managerRoleId)
+      })
+
+      console.log(`TransactionService: Found ${managers.length} managers`)
+      return managers
     } catch (error) {
-      console.error('TransactionService: Error getting managers:', error);
-      return [];
+      console.error("TransactionService: Error getting managers:", error)
+      return []
     }
   },
-  
+
   /**
    * Get all treasurers for treasury management
-   * 
+   *
    * This function extracts all users with the 'treasurer' role in the system
    * @returns {Promise<Array>} - List of treasurer users with their details
    */
   getAllTreasurers: async () => {
     try {
-      console.log('TransactionService: Getting all treasurers...');
-      
+      console.log("TransactionService: Getting all treasurers...")
+
       // Get all users first
-      const { users } = await getAllUsers({ limit: 100 });
-      
+      const { users } = await getAllUsers({ limit: 100 })
+
       if (!users || users.length === 0) {
-        console.warn('TransactionService: No users found');
-        return [];
+        console.warn("TransactionService: No users found")
+        return []
       }
-      
+
       // Try to get the treasurer role ID
-      let treasurerRoleId = null;
+      let treasurerRoleId = null
       try {
-        const treasurerRole = await getRoleByName('treasurer');
-        treasurerRoleId = treasurerRole?.id;
+        const treasurerRole = await getRoleByName("treasurer")
+        treasurerRoleId = treasurerRole?.id
       } catch (error) {
-        console.warn('TransactionService: Error getting treasurer role by name:', error);
+        console.warn("TransactionService: Error getting treasurer role by name:", error)
       }
-      
+
       // Filter users who have treasurer role
       // Check both the legacy 'role' string and the newer 'role_id' reference
-      const treasurers = users.filter(user => {
+      const treasurers = users.filter((user) => {
         return (
-          (user.role && user.role.toLowerCase() === 'treasurer') || 
+          (user.role && user.role.toLowerCase() === "treasurer") ||
           (treasurerRoleId && user.role_id === treasurerRoleId)
-        );
-      });
-      
-      console.log(`TransactionService: Found ${treasurers.length} treasurers`);
-      return treasurers;
+        )
+      })
+
+      console.log(`TransactionService: Found ${treasurers.length} treasurers`)
+      return treasurers
     } catch (error) {
-      console.error('TransactionService: Error getting treasurers:', error);
-      return [];
+      console.error("TransactionService: Error getting treasurers:", error)
+      return []
     }
   },
-  
+
   /**
    * Get all users by role for treasury management
-   * 
+   *
    * @param {string} roleName - The name of the role to filter by ('cashier', 'manager', 'treasurer', etc.)
    * @returns {Promise<Array>} - List of users with the specified role
    */
   getUsersByRole: async (roleName) => {
     try {
-      console.log(`TransactionService: Getting users with role '${roleName}'...`);
-      
+      console.log(`TransactionService: Getting users with role '${roleName}'...`)
+
       if (!roleName) {
-        throw new Error('Role name is required');
+        throw new Error("Role name is required")
       }
-      
+
       // Get all users first
-      const { users } = await getAllUsers({ limit: 100 });
-      
+      const { users } = await getAllUsers({ limit: 100 })
+
       if (!users || users.length === 0) {
-        console.warn('TransactionService: No users found');
-        return [];
+        console.warn("TransactionService: No users found")
+        return []
       }
-      
+
       // Try to get the role ID
-      let roleId = null;
+      let roleId = null
       try {
-        const role = await getRoleByName(roleName);
-        roleId = role?.id;
+        const role = await getRoleByName(roleName)
+        roleId = role?.id
       } catch (error) {
-        console.warn(`TransactionService: Error getting role by name '${roleName}':`, error);
+        console.warn(`TransactionService: Error getting role by name '${roleName}':`, error)
       }
-      
+
       // Filter users who have the specified role
       // Check both the legacy 'role' string and the newer 'role_id' reference
-      const filteredUsers = users.filter(user => {
-        return (
-          (user.role && user.role.toLowerCase() === roleName.toLowerCase()) || 
-          (roleId && user.role_id === roleId)
-        );
-      });
-      
-      console.log(`TransactionService: Found ${filteredUsers.length} users with role '${roleName}'`);
-      return filteredUsers;
+      const filteredUsers = users.filter((user) => {
+        return (user.role && user.role.toLowerCase() === roleName.toLowerCase()) || (roleId && user.role_id === roleId)
+      })
+
+      console.log(`TransactionService: Found ${filteredUsers.length} users with role '${roleName}'`)
+      return filteredUsers
     } catch (error) {
-      console.error(`TransactionService: Error getting users with role '${roleName}':`, error);
-      return [];
+      console.error(`TransactionService: Error getting users with role '${roleName}':`, error)
+      return []
     }
-  }
+  },
 }
