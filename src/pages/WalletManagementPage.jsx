@@ -112,7 +112,7 @@ export default function WalletManagementPage() {
   };
 
   return (
-    <div className="max-w-3xl mx-auto px-4 py-8">
+  <div className="max-w-3xl mx-auto px-4 py-8 w-full">
       <h1 className="text-2xl font-bold mb-8">{t('walletManagement.title')}</h1>
 
       {/* Custody selection */}
@@ -143,8 +143,8 @@ export default function WalletManagementPage() {
 
           {/* Show custody currency pairs analysis table */}
           {selectedCustody && custodyAnalysis && (
-            <div className="overflow-x-auto">
-              <table className="min-w-full bg-white">
+            <div className="overflow-x-auto w-full">
+              <table className="min-w-full bg-white text-xs sm:text-sm">
                 <thead>
                   <tr>
                     <th className="py-2 px-4 border-b text-left">{t('currencyPairsTable.pair')}</th>
@@ -176,51 +176,66 @@ export default function WalletManagementPage() {
           ) : wallets.length === 0 ? (
             <div className="text-gray-500">{t('walletManagement.noWallets')}</div>
           ) : (
-            <div className="space-y-3">
-              {wallets.map((wallet) => (
-                <div key={wallet.id} className="border rounded p-3 flex items-center justify-between">
-                  <div>
-                    <div className="font-medium">{wallet.name}</div>
-                    <div className="text-xs text-gray-600 mt-1 flex flex-wrap gap-2">
-                      {wallet.currencies && Object.keys(wallet.currencies).length > 0 ? (
-                        Object.entries(wallet.currencies).map(([code, bal]) => (
-                          <span key={code} className="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-100 rounded">
-                            <span className="font-mono">{code}</span>
-                            <span className="text-gray-700">{Number(bal).toLocaleString()}</span>
-                          </span>
-                        ))
-                      ) : (
-                        <span className="text-gray-400">{t('walletManagement.noBalances')}</span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button variant="secondary" onClick={() => { setWalletForModal(wallet); setShowAddFunds(true); }}>
-                      {t('walletManagement.addFunds')}
-                    </Button>
-                    <Button variant="outline" onClick={() => { setShowCreateCurrencyType(true); }}>
-                      {t('create.currencyType')}
-                    </Button>
-                    <Button
-                      variant="danger"
-                      onClick={async () => {
-                        if (!confirm('Delete this wallet? This action cannot be undone.')) return;
-                        try {
-                          const { deleteWallet } = await import('../lib/supabase/tables/wallets');
-                          await deleteWallet(wallet.id);
-                          await loadWallets();
-                          show({ type: 'success', title: t('walletManagement.success'), message: 'Wallet deleted' });
-                        } catch (e) {
-                          console.error('Delete wallet failed:', e);
-                          show({ type: 'error', title: t('walletManagement.errorLoadingWallets'), message: e.message });
-                        }
-                      }}
-                    >
-                      {t('common.delete')}
-                    </Button>
-                  </div>
-                </div>
-              ))}
+            <div className="overflow-x-auto w-full">
+              <table className="min-w-full bg-white text-xs sm:text-sm">
+                <thead>
+                  <tr>
+                    <th className="py-2 px-4 border-b text-left">{t('walletManagement.walletName') || 'Wallet Name'}</th>
+                    <th className="py-2 px-4 border-b text-left">{t('walletManagement.balances') || 'Balances'}</th>
+                    <th className="py-2 px-4 border-b text-left">{t('walletManagement.actions') || 'Actions'}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {wallets.map((wallet) => (
+                    <tr key={wallet.id}>
+                      <td className="py-2 px-4 border-b font-medium break-words">{wallet.name}</td>
+                      <td className="py-2 px-4 border-b">
+                        <div className="flex flex-wrap gap-2">
+                          {wallet.currencies && Object.keys(wallet.currencies).length > 0 ? (
+                            Object.entries(wallet.currencies).map(([code, bal]) => (
+                              <span key={code} className="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-100 rounded">
+                                <span className="font-mono">{code}</span>
+                                <span className="text-gray-700">{Number(bal).toLocaleString()}</span>
+                              </span>
+                            ))
+                          ) : (
+                            <span className="text-gray-400">{t('walletManagement.noBalances')}</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="py-2 px-4 border-b">
+                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-1">
+                          <Button variant="secondary" size="sm" style={{minWidth: '90px', fontSize: '0.85rem', padding: '0.4rem 0.6rem'}} onClick={() => { setWalletForModal(wallet); setShowAddFunds(true); }}>
+                            {t('walletManagement.addFunds')}
+                          </Button>
+                          <Button variant="outline" size="sm" style={{minWidth: '90px', fontSize: '0.85rem', padding: '0.4rem 0.6rem'}} onClick={() => { setShowCreateCurrencyType(true); }}>
+                            {t('create.currencyType')}
+                          </Button>
+                          <Button
+                            variant="danger"
+                            size="sm"
+                            style={{minWidth: '90px', fontSize: '0.85rem', padding: '0.4rem 0.6rem'}}
+                            onClick={async () => {
+                              if (!confirm('Delete this wallet? This action cannot be undone.')) return;
+                              try {
+                                const { deleteWallet } = await import('../lib/supabase/tables/wallets');
+                                await deleteWallet(wallet.id);
+                                await loadWallets();
+                                show({ type: 'success', title: t('walletManagement.success'), message: 'Wallet deleted' });
+                              } catch (e) {
+                                console.error('Delete wallet failed:', e);
+                                show({ type: 'error', title: t('walletManagement.errorLoadingWallets'), message: e.message });
+                              }
+                            }}
+                          >
+                            {t('common.delete')}
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
         </div>

@@ -192,10 +192,8 @@ export function Sidebar({ isOpen, setIsOpen, profile, dir }) {
 
       {/* Side drawer - visible on all screens */}
       <div
-        className={`fixed top-0 bottom-0 ${dir === "rtl" ? "right-0" : "left-0"} h-full w-72 bg-gradient-to-b from-emerald-50 to-white shadow-xl z-40 transform transition-transform duration-300 ease-in-out ${dir === "rtl" ? "rounded-l-xl" : "rounded-r-xl"} ${
-          // Use isOpen state for both mobile and desktop
-          isOpen ? "translate-x-0" : dir === "rtl" ? "translate-x-full" : "-translate-x-full"
-        }`}
+  className={`fixed top-0 bottom-0 ${dir === "rtl" ? "right-0" : "left-0"} h-full w-80 bg-gradient-to-b from-emerald-50 to-white shadow-xl z-40 transform transition-transform duration-300 ease-in-out ${dir === "rtl" ? "rounded-l-xl" : "rounded-r-xl"} ${isOpen ? "translate-x-0" : dir === "rtl" ? "translate-x-full" : "-translate-x-full"} overflow-y-auto scrollbar-thin scrollbar-thumb-emerald-200 scrollbar-track-white scrollbar-hide-unless-scroll`}
+        style={{ overflowX: 'hidden' }}
       >
         {/* Collapse button alongside sidebar edge - only visible on desktop */}
         <button
@@ -227,7 +225,7 @@ export function Sidebar({ isOpen, setIsOpen, profile, dir }) {
             <polyline points="15 18 9 12 15 6"></polyline>
           </svg>
         </button>
-        <div className="flex flex-col h-full">
+  <div className="flex flex-col h-full min-h-0">
           {/* Header with user info */}
           <div className="p-5 border-b border-emerald-100 bg-gradient-to-r from-emerald-50 to-emerald-100">
             <div className="flex items-center justify-between mb-2">
